@@ -1,0 +1,12 @@
+<Page xmlns="http://schemas.nativescript.org/tns.xsd" navigatingTo="onNavigatingTo">
+    <ActionBar title="Text to Speech" icon="" />
+    <StackLayout class="p-4">
+        <TextField hint="Enter Thai text here" text="{{ userInput }}" class="p-2 mb-2 border rounded" />
+        <Button text="Generate Speech" tap="{{ onEnter }}" class="-primary mb-4" />
+        <Label text="{{ inputMessage }}" class="text-lg text-center text-gray-400" textWrap="true" />
+        <Button text="{{ isPlaying ? 'Pause' : 'Play' }}" 
+                tap="{{ togglePlay }}" 
+                class="{{ isPlaying ? '-secondary' : '-primary' }} mb-4"
+                visibility="{{ audioUrl ? 'visible' : 'collapsed' }}" />
+    </StackLayout>
+</Page>
