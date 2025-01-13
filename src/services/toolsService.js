@@ -116,7 +116,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
     // First request without streaming to check for function calls
     const initialRequest = {
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: validMessages,
       temperature: 0.7,
       stream: false,

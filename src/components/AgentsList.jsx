@@ -23,11 +23,11 @@ export default function AgentsList({ agents, onAddAgent, onEditAgent, onDeleteAg
             }`}
             onClick={() => onSelectAgent(agent.id)}
           >
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h4 className="font-medium text-gray-800">{agent.name}</h4>
-              <p className="text-sm text-gray-500 truncate">{agent.character}</p>
+              <p className="text-sm text-gray-500 truncate break-words">{agent.character}</p>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 ml-2 flex-shrink-0">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
