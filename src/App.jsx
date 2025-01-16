@@ -11,7 +11,7 @@ import ClearHistoryModal from './components/ClearHistoryModal';
 import AuthModal from './components/auth/AuthModal';
 import UserMenu from './components/auth/UserMenu';
 import { processAIResponse, loadConversationHistory, clearConversationHistory } from './services/api';
-import { saveAgent, loadAgents, saveTool, loadTools, saveSetting, loadSetting, loadUserProfile } from './services/storage';
+import { saveAgent, loadAgents, saveTool, loadTools, loadCredential, loadUserProfile } from './services/storage';
 import { supabase } from './lib/supabase';
 
 // Default agent configuration
@@ -51,8 +51,8 @@ function App() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        // Load API key from settings
-        const savedApiKey = await loadSetting('openai_api_key');
+        // Load API key from credentials
+        const savedApiKey = await loadCredential('openai');
         if (savedApiKey) {
           setApiKey(savedApiKey);
         }
@@ -96,13 +96,6 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Save API key to settings when it changes
-  useEffect(() => {
-    if (apiKey) {
-      saveSetting('openai_api_key', apiKey);
-    }
-  }, [apiKey]);
 
   // Load conversation history when agent changes
   useEffect(() => {
@@ -269,7 +262,7 @@ function App() {
     setIsClearHistoryModalOpen(false);
   };
 
-  const handleLoginSuccess = ({ profile, agents: newAgents, tools: newTools, conversations: newConversations }) => {
+  const handleLoginSuccess = async ({ profile, agents: newAgents, tools: newTools, conversations: newConversations, credentials }) => {
     setUserProfile(profile);
     if (newAgents?.length > 0) setAgents(newAgents);
     if (newTools?.length > 0) setTools(newTools);
@@ -281,6 +274,9 @@ function App() {
         return acc;
       }, {});
       setConversations(groupedConversations);
+    }
+    if (credentials?.openaiKey) {
+      setApiKey(credentials.openaiKey);
     }
     setIsAuthModalOpen(false);
   };

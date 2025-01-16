@@ -156,50 +156,51 @@ export async function loadTools() {
   }
 }
 
-// Save a setting for the current user
-export async function saveSetting(key, value) {
-  if (!key) return false;
-  
+// Save a credential
+export async function saveCredential(name, value) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+    if (!user) {
+      toast.error('You must be logged in to save credentials');
+      return false;
+    }
 
     const { error } = await supabase
-      .from('settings')
-      .upsert({ 
-        key,
-        value: typeof value === 'string' ? value : JSON.stringify(value),
-        user_id: user.id
+      .from('credentials')
+      .upsert({
+        user_id: user.id,
+        name,
+        value
+      }, {
+        onConflict: 'user_id,name'
       });
 
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Failed to save setting:', error);
+    console.error('Failed to save credential:', error);
+    toast.error('Failed to save credential');
     return false;
   }
 }
 
-// Load a setting for the current user
-export async function loadSetting(key) {
-  if (!key) return null;
-  
+// Load a credential
+export async function loadCredential(name) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('settings')
+      .from('credentials')
       .select('value')
-      .eq('key', key)
+      .eq('name', name)
       .eq('user_id', user.id)
       .maybeSingle();
 
     if (error) throw error;
-    
     return data?.value || null;
   } catch (error) {
-    console.warn('Failed to load setting:', error);
+    console.error('Failed to load credential:', error);
     return null;
   }
 }
@@ -267,7 +268,7 @@ export async function loadLatestConversations() {
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
-      .limit(50); // Limit to most recent 50 conversations
+      .limit(50);
 
     if (error) throw error;
 

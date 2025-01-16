@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Cog6ToothIcon, CloudIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
+import { saveCredential } from '../services/storage';
+import { toast } from 'react-hot-toast';
 
 export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,6 +18,18 @@ export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleApiKeyChange = async (e) => {
+    const newApiKey = e.target.value;
+    setApiKey(newApiKey);
+    
+    if (newApiKey) {
+      const saved = await saveCredential('openai', newApiKey);
+      if (saved) {
+        toast.success('API key saved successfully');
+      }
+    }
+  };
 
   return (
     <div className="relative" ref={menuRef}>
@@ -43,7 +57,7 @@ export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase
                 <input
                   type="password"
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={handleApiKeyChange}
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
                   placeholder="Enter your OpenAI API key"
                 />

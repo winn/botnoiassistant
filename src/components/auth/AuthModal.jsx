@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { XMarkIcon } from '@heroicons/react/24/solid';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
-import { loadUserProfile, loadAgents, loadTools, loadLatestConversations } from '../../services/storage';
+import { loadUserProfile, loadAgents, loadTools, loadLatestConversations, loadCredential } from '../../services/storage';
 
 export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -28,14 +28,15 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         if (error) throw error;
 
         // Load user data after successful login
-        const [profile, agents, tools, conversations] = await Promise.all([
+        const [profile, agents, tools, conversations, openaiKey] = await Promise.all([
           loadUserProfile(),
           loadAgents(),
           loadTools(),
-          loadLatestConversations()
+          loadLatestConversations(),
+          loadCredential('openai')
         ]);
 
-        onLoginSuccess?.({ profile, agents, tools, conversations });
+        onLoginSuccess?.({ profile, agents, tools, conversations, credentials: { openaiKey } });
         toast.success('Successfully logged in!');
       } else {
         const { error } = await supabase.auth.signUp({
