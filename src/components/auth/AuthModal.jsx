@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { XMarkIcon } from '@heroicons/react/24/solid';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
+import { loadUserProfile, loadAgents, loadTools, loadLatestConversations } from '../../services/storage';
 
-export default function AuthModal({ isOpen, onClose }) {
+export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
@@ -25,6 +26,16 @@ export default function AuthModal({ isOpen, onClose }) {
           password: formData.password,
         });
         if (error) throw error;
+
+        // Load user data after successful login
+        const [profile, agents, tools, conversations] = await Promise.all([
+          loadUserProfile(),
+          loadAgents(),
+          loadTools(),
+          loadLatestConversations()
+        ]);
+
+        onLoginSuccess?.({ profile, agents, tools, conversations });
         toast.success('Successfully logged in!');
       } else {
         const { error } = await supabase.auth.signUp({

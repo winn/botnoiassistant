@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 
-export default function UserMenu({ user, onLoginClick }) {
+export default function UserMenu({ user, profile, onLoginClick }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -37,7 +37,7 @@ export default function UserMenu({ user, onLoginClick }) {
       >
         <UserCircleIcon className="h-6 w-6 text-gray-600" />
         <span className="text-sm font-medium text-gray-700">
-          {user.user_metadata.username || user.email}
+          {profile?.username || user.email}
         </span>
       </button>
 
@@ -51,7 +51,7 @@ export default function UserMenu({ user, onLoginClick }) {
           >
             <div className="px-4 py-2 border-b">
               <div className="text-sm font-medium text-gray-900">
-                {user.user_metadata.full_name}
+                {profile?.full_name}
               </div>
               <div className="text-sm text-gray-500">
                 {user.email}

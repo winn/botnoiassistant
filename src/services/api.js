@@ -1,6 +1,7 @@
 import { toast } from 'react-hot-toast';
 import { processChatWithFunctions } from './toolsService';
 import { supabase } from '../lib/supabase';
+import { loadAgentConversations } from './storage';
 
 export async function processAIResponse(
   input, 
@@ -22,25 +23,21 @@ export async function processAIResponse(
     return null;
   }
 
-  // Get the agent's FAQs from the first conversation entry
   const agent = conversationHistory[0]?.agent || null;
   const faqs = agent?.faqs || [];
 
-  // Create FAQ section
   const faqSection = faqs.length > 0
     ? `\nFrequently Asked Questions:\n${faqs.map(faq => 
         `Q: ${faq.question}\nA: ${faq.answer}`
       ).join('\n\n')}`
     : '';
 
-  // Create tools section
   const toolsSection = tools.length > 0
     ? `\n\nAvailable Tools:\n${tools.map((tool, index) => 
         `${index + 1}. ${tool.name}\n   Description: ${tool.description}\n   Input: ${tool.input.description}\n   Output: ${tool.output.description}`
       ).join('\n\n')}`
     : '';
 
-  // Combine all sections into a comprehensive system prompt
   const systemPrompt = `Character Description:
 ${botCharacter}
 
@@ -103,34 +100,7 @@ Instructions for Tool Usage:
 
 export async function loadConversationHistory(agentId) {
   if (!agentId) return [];
-
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('agent_id', agentId)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      console.warn('Error loading conversations:', error);
-      return [];
-    }
-
-    return data.map(conv => ({
-      userInput: conv.user_input,
-      aiResponse: conv.ai_response,
-      debug: conv.debug_info,
-      timestamp: new Date(conv.created_at).getTime(),
-      agentId: conv.agent_id
-    }));
-  } catch (error) {
-    console.warn('Failed to load conversations:', error);
-    return [];
-  }
+  return await loadAgentConversations(agentId);
 }
 
 export async function clearConversationHistory(agentId) {

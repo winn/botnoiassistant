@@ -11,7 +11,7 @@ import ClearHistoryModal from './components/ClearHistoryModal';
 import AuthModal from './components/auth/AuthModal';
 import UserMenu from './components/auth/UserMenu';
 import { processAIResponse, loadConversationHistory, clearConversationHistory } from './services/api';
-import { saveAgent, loadAgents, saveTool, loadTools, saveSetting, loadSetting } from './services/storage';
+import { saveAgent, loadAgents, saveTool, loadTools, saveSetting, loadSetting, loadUserProfile } from './services/storage';
 import { supabase } from './lib/supabase';
 
 // Default agent configuration
@@ -39,9 +39,9 @@ function App() {
   const [isToolModalOpen, setIsToolModalOpen] = useState(false);
   const [selectedTool, setSelectedTool] = useState(null);
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [useSupabase, setUseSupabase] = useState(true);
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const inputRef = useRef(null);
@@ -50,23 +50,33 @@ function App() {
   // Load initial data from Supabase
   useEffect(() => {
     async function loadInitialData() {
-      // Load API key from settings
-      const savedApiKey = await loadSetting('openai_api_key');
-      if (savedApiKey) {
-        setApiKey(savedApiKey);
-      }
+      try {
+        // Load API key from settings
+        const savedApiKey = await loadSetting('openai_api_key');
+        if (savedApiKey) {
+          setApiKey(savedApiKey);
+        }
 
-      // Load agents
-      const loadedAgents = await loadAgents();
-      if (loadedAgents && loadedAgents.length > 0) {
-        setAgents(loadedAgents);
-        setSelectedAgentId(loadedAgents[0].id);
-      }
+        // Load agents
+        const loadedAgents = await loadAgents();
+        if (loadedAgents && loadedAgents.length > 0) {
+          setAgents(loadedAgents);
+          setSelectedAgentId(loadedAgents[0].id);
+        }
 
-      // Load tools
-      const loadedTools = await loadTools();
-      if (loadedTools) {
-        setTools(loadedTools);
+        // Load tools
+        const loadedTools = await loadTools();
+        if (loadedTools) {
+          setTools(loadedTools);
+        }
+
+        // Load user profile if logged in
+        const profile = await loadUserProfile();
+        if (profile) {
+          setUserProfile(profile);
+        }
+      } catch (error) {
+        console.error('Error loading initial data:', error);
       }
     }
     loadInitialData();
@@ -93,14 +103,6 @@ function App() {
       saveSetting('openai_api_key', apiKey);
     }
   }, [apiKey]);
-
-  // Clock update effect
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Load conversation history when agent changes
   useEffect(() => {
@@ -267,6 +269,22 @@ function App() {
     setIsClearHistoryModalOpen(false);
   };
 
+  const handleLoginSuccess = ({ profile, agents: newAgents, tools: newTools, conversations: newConversations }) => {
+    setUserProfile(profile);
+    if (newAgents?.length > 0) setAgents(newAgents);
+    if (newTools?.length > 0) setTools(newTools);
+    if (newConversations) {
+      const groupedConversations = newConversations.reduce((acc, conv) => {
+        const agentId = conv.agentId;
+        if (!acc[agentId]) acc[agentId] = [];
+        acc[agentId].push(conv);
+        return acc;
+      }, {});
+      setConversations(groupedConversations);
+    }
+    setIsAuthModalOpen(false);
+  };
+
   const currentAgent = agents.find(a => a.id === selectedAgentId);
 
   return (
@@ -342,11 +360,9 @@ function App() {
             >
               <TrashIcon className="h-6 w-6" />
             </button>
-            <div className="text-gray-600 font-medium">
-              {currentTime.toLocaleTimeString()}
-            </div>
             <UserMenu 
               user={user}
+              profile={userProfile}
               onLoginClick={() => setIsAuthModalOpen(true)}
             />
             <TopMenu
@@ -416,6 +432,7 @@ function App() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
     </div>
   );
