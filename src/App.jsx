@@ -1,153 +1,169 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { PaperAirplaneIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MicrophoneIcon, StopIcon, PaperAirplaneIcon, Bars3Icon, XMarkIcon, TrashIcon } from '@heroicons/react/24/solid';
 import { Toaster, toast } from 'react-hot-toast';
 import Settings from './components/Settings';
-import ChatHistory from './components/ChatHistory';
 import TopMenu from './components/TopMenu';
-import ToolModal from './components/ToolModal';
+import ChatHistory from './components/ChatHistory';
 import AgentModal from './components/AgentModal';
+import ToolModal from './components/ToolModal';
 import ClearHistoryModal from './components/ClearHistoryModal';
-import { processAIResponse } from './services/api';
+import { processAIResponse, loadConversationHistory, clearConversationHistory } from './services/api';
+import { saveAgent, loadAgents, saveTool, loadTools, saveSetting, loadSetting } from './services/storage';
 
-const STORAGE_KEY = 'thai_ai_conversation';
-const API_KEY_STORAGE = 'openai_api_key';
-const AGENTS_STORAGE = 'agents';
-const TOOLS_STORAGE = 'function_tools';
-
+// Default agent configuration
 const DEFAULT_AGENT = {
-  id: 'default',
+  id: crypto.randomUUID(),
   name: 'Eva',
   character: 'เป็นเพื่อนผู้หญิงน่ารัก คอยช่วยเหลือ ใจดี',
   actions: 'ให้ตอบสั้น ๆ เหมือนคุยกับเพื่อน ให้พูดไพเราะ ลงท้ายด้วยค่ะ แทนตัวเองว่า เอวา',
-  enabledTools: []
+  enabledTools: [],
+  faqs: []
 };
 
-export default function App() {
+function App() {
   const [userInput, setUserInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) || '');
-  const [isToolModalOpen, setIsToolModalOpen] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [conversations, setConversations] = useState({});
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const [agents, setAgents] = useState([DEFAULT_AGENT]);
+  const [selectedAgentId, setSelectedAgentId] = useState(DEFAULT_AGENT.id);
+  const [tools, setTools] = useState([]);
   const [isAgentModalOpen, setIsAgentModalOpen] = useState(false);
-  const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
-  const [selectedTool, setSelectedTool] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [streamingText, setStreamingText] = useState('');
-  const [agents, setAgents] = useState(() => {
-    const saved = localStorage.getItem(AGENTS_STORAGE);
-    return saved ? JSON.parse(saved) : [DEFAULT_AGENT];
-  });
-  const [selectedAgentId, setSelectedAgentId] = useState(() => agents[0]?.id);
-  const [tools, setTools] = useState(() => {
-    const saved = localStorage.getItem(TOOLS_STORAGE);
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [conversations, setConversations] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [isToolModalOpen, setIsToolModalOpen] = useState(false);
+  const [selectedTool, setSelectedTool] = useState(null);
+  const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [useSupabase, setUseSupabase] = useState(true);
 
   const inputRef = useRef(null);
   const chatEndRef = useRef(null);
 
+  // Load initial data from Supabase
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
-  }, [conversations]);
-
-  useEffect(() => {
-    localStorage.setItem(API_KEY_STORAGE, apiKey);
-  }, [apiKey]);
-
-  useEffect(() => {
-    localStorage.setItem(AGENTS_STORAGE, JSON.stringify(agents));
-  }, [agents]);
-
-  useEffect(() => {
-    localStorage.setItem(TOOLS_STORAGE, JSON.stringify(tools));
-  }, [tools]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversations, streamingText]);
-
-  const processUserInput = async (input) => {
-    if (!input.trim()) {
-      toast.error('Please provide some input');
-      return;
-    }
-
-    if (!apiKey) {
-      toast.error('Please enter your OpenAI API key');
-      return;
-    }
-
-    const currentAgent = agents.find(a => a.id === selectedAgentId);
-    if (!currentAgent) {
-      toast.error('No agent selected');
-      return;
-    }
-
-    setIsProcessing(true);
-    setStreamingText('');
-
-    // Immediately add user input to conversation
-    setConversations(prev => ({
-      ...prev,
-      [selectedAgentId]: [
-        ...(prev[selectedAgentId] || []),
-        { userInput: input, timestamp: Date.now() }
-      ]
-    }));
-
-    try {
-      const enabledTools = tools.filter(tool => 
-        currentAgent.enabledTools.includes(tool.id)
-      );
-
-      const result = await processAIResponse(
-        input,
-        apiKey,
-        conversations[selectedAgentId] || [],
-        currentAgent.character,
-        currentAgent.actions,
-        enabledTools,
-        (chunk) => setStreamingText(prev => prev + chunk)
-      );
-
-      if (result) {
-        // Update the conversation with the complete response
-        setConversations(prev => {
-          const agentConversations = prev[selectedAgentId] || [];
-          const lastMessage = agentConversations[agentConversations.length - 1];
-          
-          return {
-            ...prev,
-            [selectedAgentId]: [
-              ...agentConversations.slice(0, -1),
-              {
-                ...lastMessage,
-                aiResponse: result.response,
-                debug: result.debug
-              }
-            ]
-          };
-        });
+    async function loadInitialData() {
+      // Load API key from settings
+      const savedApiKey = await loadSetting('openai_api_key');
+      if (savedApiKey) {
+        setApiKey(savedApiKey);
       }
 
+      // Load agents
+      const loadedAgents = await loadAgents();
+      if (loadedAgents && loadedAgents.length > 0) {
+        setAgents(loadedAgents);
+        setSelectedAgentId(loadedAgents[0].id);
+      }
+
+      // Load tools
+      const loadedTools = await loadTools();
+      if (loadedTools) {
+        setTools(loadedTools);
+      }
+    }
+    loadInitialData();
+  }, []);
+
+  // Save API key to settings when it changes
+  useEffect(() => {
+    if (apiKey) {
+      saveSetting('openai_api_key', apiKey);
+    }
+  }, [apiKey]);
+
+  // Clock update effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Load conversation history when agent changes
+  useEffect(() => {
+    async function loadHistory() {
+      const history = await loadConversationHistory(selectedAgentId);
+      if (history.length > 0) {
+        setConversations(prev => ({ ...prev, [selectedAgentId]: history }));
+      }
+    }
+    loadHistory();
+  }, [selectedAgentId]);
+
+  // Scroll to bottom when conversation updates
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [conversations, streamingResponse]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!isProcessing && userInput.trim()) {
+      const currentInput = userInput.trim();
       setUserInput('');
-      setStreamingText('');
-    } catch (error) {
-      console.error('Processing Error:', error);
-      toast.error(error.message);
       
-      // Remove the last message if there was an error
+      const currentAgent = agents.find(a => a.id === selectedAgentId);
+      if (!currentAgent) {
+        toast.error('No agent selected');
+        return;
+      }
+      
+      const timestamp = Date.now();
       setConversations(prev => ({
         ...prev,
-        [selectedAgentId]: (prev[selectedAgentId] || []).slice(0, -1)
+        [selectedAgentId]: [
+          ...(prev[selectedAgentId] || []),
+          {
+            userInput: currentInput,
+            timestamp,
+            agentId: selectedAgentId,
+            agentName: currentAgent.name,
+            agent: currentAgent
+          }
+        ]
       }));
-    } finally {
-      setIsProcessing(false);
+
+      setIsProcessing(true);
+      try {
+        const enabledTools = tools.filter(tool => 
+          currentAgent.enabledTools.includes(tool.id)
+        );
+
+        const result = await processAIResponse(
+          currentInput,
+          apiKey,
+          conversations[selectedAgentId] || [],
+          currentAgent.character,
+          currentAgent.actions,
+          enabledTools,
+          (chunk) => setStreamingResponse(prev => prev + chunk),
+          useSupabase
+        );
+
+        if (result) {
+          setConversations(prev => ({
+            ...prev,
+            [selectedAgentId]: prev[selectedAgentId].map(conv => 
+              conv.timestamp === timestamp
+                ? {
+                    ...conv,
+                    aiResponse: result.response,
+                    debug: result.debug
+                  }
+                : conv
+            )
+          }));
+        }
+      } catch (error) {
+        console.error('Error processing input:', error);
+        toast.error(error.message || 'Failed to process input');
+      } finally {
+        setIsProcessing(false);
+        setStreamingResponse('');
+        inputRef.current?.focus();
+      }
     }
   };
 
@@ -161,22 +177,38 @@ export default function App() {
     setIsAgentModalOpen(true);
   };
 
-  const handleDeleteAgent = (agentId) => {
-    setAgents(prev => prev.filter(a => a.id !== agentId));
-    if (selectedAgentId === agentId) {
-      setSelectedAgentId(agents.find(a => a.id !== agentId)?.id);
+  const handleDeleteAgent = async (agentId) => {
+    try {
+      const { error } = await supabase
+        .from('agents')
+        .delete()
+        .eq('id', agentId);
+
+      if (error) throw error;
+
+      setAgents(prev => prev.filter(a => a.id !== agentId));
+      if (selectedAgentId === agentId) {
+        setSelectedAgentId(agents.find(a => a.id !== agentId)?.id);
+      }
+    } catch (error) {
+      console.error('Failed to delete agent:', error);
+      toast.error('Failed to delete agent');
     }
   };
 
-  const handleSaveAgent = (agentData) => {
-    if (selectedAgent) {
-      setAgents(prev => prev.map(agent => 
-        agent.id === selectedAgent.id ? { ...agentData, id: agent.id } : agent
-      ));
-    } else {
-      const newAgent = { ...agentData, id: crypto.randomUUID() };
-      setAgents(prev => [...prev, newAgent]);
-      setSelectedAgentId(newAgent.id);
+  const handleSaveAgent = async (agentData) => {
+    const savedAgent = await saveAgent(agentData);
+    if (savedAgent) {
+      if (selectedAgent) {
+        setAgents(prev => prev.map(agent => 
+          agent.id === selectedAgent.id ? savedAgent : agent
+        ));
+      } else {
+        setAgents(prev => [...prev, savedAgent]);
+        setSelectedAgentId(savedAgent.id);
+      }
+      setIsAgentModalOpen(false);
+      toast.success(selectedAgent ? 'Agent updated' : 'Agent created');
     }
   };
 
@@ -190,58 +222,37 @@ export default function App() {
     setIsToolModalOpen(true);
   };
 
-  const handleSaveTool = (toolData) => {
-    if (selectedTool) {
-      setTools(tools.map(tool => 
-        tool.id === selectedTool.id ? { ...toolData, id: tool.id } : tool
-      ));
+  const handleSaveTool = async (toolData) => {
+    const savedTool = await saveTool(toolData);
+    if (savedTool) {
+      if (selectedTool) {
+        setTools(prev => prev.map(tool => 
+          tool.id === selectedTool.id ? savedTool : tool
+        ));
+      } else {
+        setTools(prev => [...prev, savedTool]);
+      }
+      setIsToolModalOpen(false);
+      toast.success(selectedTool ? 'Tool updated' : 'Tool created');
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (await clearConversationHistory(selectedAgentId)) {
+      setConversations(prev => ({ ...prev, [selectedAgentId]: [] }));
+      toast.success('Chat history cleared');
     } else {
-      setTools([...tools, { ...toolData, id: crypto.randomUUID() }]);
+      toast.error('Failed to clear chat history');
     }
-  };
-
-  const handleClearHistory = () => {
-    setIsClearHistoryModalOpen(true);
-  };
-
-  const handleConfirmClearHistory = () => {
-    setConversations({});
     setIsClearHistoryModalOpen(false);
-    toast.success('Chat history cleared');
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!isProcessing) {
-      await processUserInput(userInput);
-    }
-  };
+  const currentAgent = agents.find(a => a.id === selectedAgentId);
 
   return (
     <div className="min-h-screen bg-sky-50">
       <Toaster position="top-right" />
       
-      <ToolModal
-        isOpen={isToolModalOpen}
-        onClose={() => setIsToolModalOpen(false)}
-        onSave={handleSaveTool}
-        tool={selectedTool}
-      />
-
-      <AgentModal
-        isOpen={isAgentModalOpen}
-        onClose={() => setIsAgentModalOpen(false)}
-        onSave={handleSaveAgent}
-        agent={selectedAgent}
-        tools={tools}
-      />
-
-      <ClearHistoryModal
-        isOpen={isClearHistoryModalOpen}
-        onClose={() => setIsClearHistoryModalOpen(false)}
-        onConfirm={handleConfirmClearHistory}
-      />
-
       {/* Mobile Sidebar */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -294,7 +305,6 @@ export default function App() {
 
       {/* Main Content */}
       <div className="md:pl-80 p-4 md:p-8 flex flex-col h-screen">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => setIsSidebarOpen(true)}
@@ -303,36 +313,46 @@ export default function App() {
             <Bars3Icon className="h-6 w-6" />
           </button>
           <h1 className="text-2xl font-bold text-center flex-1 bg-clip-text text-transparent bg-gradient-to-r from-sky-500 to-sky-600">
-            AI Assistant
+            {currentAgent?.name || 'Voice Assistant'}
           </h1>
-          <TopMenu
-            apiKey={apiKey}
-            setApiKey={setApiKey}
-            onClearHistory={handleClearHistory}
-          />
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setIsClearHistoryModalOpen(true)}
+              className="p-2 rounded-lg hover:bg-sky-100 text-sky-500"
+            >
+              <TrashIcon className="h-6 w-6" />
+            </button>
+            <div className="text-gray-600 font-medium">
+              {currentTime.toLocaleTimeString()}
+            </div>
+            <TopMenu
+              apiKey={apiKey}
+              setApiKey={setApiKey}
+              useSupabase={useSupabase}
+              setUseSupabase={setUseSupabase}
+            />
+          </div>
         </div>
 
-        {/* Chat Container */}
-        <div className="flex-1 overflow-y-auto mb-6 bg-white/80 backdrop-blur-sm rounded-lg custom-scrollbar">
+        <div className="flex-1 overflow-y-auto mb-6 bg-white/80 backdrop-blur-sm rounded-lg">
           <ChatHistory
             conversations={conversations}
             agentId={selectedAgentId}
             isProcessing={isProcessing}
-            streamingText={streamingText}
+            streamingText={streamingResponse}
           />
           <div ref={chatEndRef} />
         </div>
 
-        {/* Input Controls */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4">
-          <form onSubmit={handleSubmit} className="flex space-x-2">
+        <form onSubmit={handleSubmit} className="bg-white/80 backdrop-blur-sm rounded-lg p-4">
+          <div className="flex space-x-2">
             <input
               ref={inputRef}
               type="text"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               placeholder="Type your message..."
-              className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+              className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
               disabled={isProcessing}
             />
             <motion.button
@@ -341,14 +361,36 @@ export default function App() {
               type="submit"
               disabled={isProcessing || !userInput.trim()}
               className={`p-2 rounded-lg bg-sky-500 text-white ${
-                isProcessing || !userInput.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'
+                isProcessing || !userInput.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-sky-600'
               }`}
             >
               <PaperAirplaneIcon className="h-5 w-5" />
             </motion.button>
-          </form>
-        </div>
+          </div>
+        </form>
       </div>
+
+      {/* Modals */}
+      <AgentModal
+        isOpen={isAgentModalOpen}
+        onClose={() => setIsAgentModalOpen(false)}
+        onSave={handleSaveAgent}
+        agent={selectedAgent}
+        tools={tools}
+      />
+      <ToolModal
+        isOpen={isToolModalOpen}
+        onClose={() => setIsToolModalOpen(false)}
+        onSave={handleSaveTool}
+        tool={selectedTool}
+      />
+      <ClearHistoryModal
+        isOpen={isClearHistoryModalOpen}
+        onClose={() => setIsClearHistoryModalOpen(false)}
+        onConfirm={handleClearHistory}
+      />
     </div>
   );
 }
+
+export default App;

@@ -255,7 +255,7 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                         })}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                         rows="2"
-                        placeholder="Describe the required input (e.g., customer name, order ID)"
+                        placeholder="Describe the required input"
                       />
                     </div>
                     <div>
@@ -270,14 +270,7 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                         })}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"
                         rows="4"
-                        placeholder={`{
-  "type": "object",
-  "properties": {
-    "query": {
-      "type": "string"
-    }
-  }
-}`}
+                        placeholder="{}"
                       />
                     </div>
                   </div>
@@ -294,7 +287,7 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                         })}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                         rows="2"
-                        placeholder="Describe the expected output (e.g., customer details, order status)"
+                        placeholder="Describe the expected output"
                       />
                     </div>
                     <div>
@@ -309,14 +302,7 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                         })}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"
                         rows="4"
-                        placeholder={`{
-  "type": "object",
-  "properties": {
-    "result": {
-      "type": "string"
-    }
-  }
-}`}
+                        placeholder="{}"
                       />
                     </div>
                   </div>
@@ -360,9 +346,7 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                       onChange={(e) => setFormData({ ...formData, headers: e.target.value })}
                       className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"
                       rows="3"
-                      placeholder={`{
-  "Authorization": "Bearer your_token"
-}`}
+                      placeholder="{}"
                     />
                   </div>
                   {formData.method === 'POST' && (
@@ -375,9 +359,7 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                         onChange={(e) => setFormData({ ...formData, body: e.target.value })}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"
                         rows="3"
-                        placeholder={`{
-  "query": "{{query}}"
-}`}
+                        placeholder="{}"
                       />
                     </div>
                   )}

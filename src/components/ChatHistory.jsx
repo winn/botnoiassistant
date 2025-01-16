@@ -38,7 +38,9 @@ export default function ChatHistory({ conversations, agentId, isProcessing, stre
               <div className="mb-2">
                 <div className="max-w-3xl mx-auto flex items-start space-x-4">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-sm font-semibold">AI</span>
+                    <span className="text-white text-sm font-semibold">
+                      {turn.agentName?.slice(0, 2) || 'Ev'}
+                    </span>
                   </div>
                   <div className="flex-1 max-w-[calc(100%-2.5rem)]">
                     <div className="bg-gray-100 rounded-2xl px-4 py-2">

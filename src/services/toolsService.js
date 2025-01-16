@@ -26,8 +26,14 @@ export function convertToolToFunction(tool) {
       };
     }
 
+    // Sanitize the function name to only include valid characters
+    const sanitizedName = tool.name
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '_') // Replace invalid characters with underscore
+      .replace(/^[^a-z]/, 'fn_'); // Ensure name starts with a letter
+
     return {
-      name: tool.name.toLowerCase().replace(/\s+/g, '_'),
+      name: sanitizedName,
       description: `${tool.description}\n\nInput: ${tool.input.description}\nOutput: ${tool.output.description}`,
       parameters: {
         type: 'object',
@@ -158,7 +164,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
       const functionName = message.function_call.name;
       const tool = tools.find(t => 
-        t.name.toLowerCase().replace(/\s+/g, '_') === functionName
+        t.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/^[^a-z]/, 'fn_') === functionName
       );
 
       if (!tool) {
@@ -184,7 +190,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
       // Make final request with streaming for the response
       const finalRequest = {
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: validMessages,
         temperature: 0.7,
         stream: true
@@ -253,7 +259,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
     } else {
       // No function call needed, stream the response directly
       const streamingRequest = {
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: validMessages,
         temperature: 0.7,
         stream: true

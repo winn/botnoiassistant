@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Cog6ToothIcon } from '@heroicons/react/24/solid';
+import { Cog6ToothIcon, CloudIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function TopMenu({ apiKey, setApiKey }) {
+export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -47,6 +47,28 @@ export default function TopMenu({ apiKey, setApiKey }) {
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
                   placeholder="Enter your OpenAI API key"
                 />
+              </div>
+              <div>
+                <label className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Store Conversations</span>
+                  <div 
+                    onClick={() => setUseSupabase(!useSupabase)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                      useSupabase ? 'bg-sky-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className="sr-only">Store conversations in cloud</span>
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        useSupabase ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </div>
+                </label>
+                <div className="mt-1 flex items-center text-sm text-gray-500">
+                  <CloudIcon className="h-4 w-4 mr-1" />
+                  {useSupabase ? 'Storing conversations in cloud' : 'Keeping conversations in browser only'}
+                </div>
               </div>
             </div>
           </motion.div>

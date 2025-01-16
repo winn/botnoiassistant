@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/solid';
+import { XMarkIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 
@@ -14,7 +14,8 @@ export default function AgentModal({
     name: '',
     character: '',
     actions: '',
-    enabledTools: []
+    enabledTools: [],
+    faqs: []
   });
 
   useEffect(() => {
@@ -23,14 +24,16 @@ export default function AgentModal({
         name: agent.name,
         character: agent.character,
         actions: agent.actions,
-        enabledTools: agent.enabledTools || []
+        enabledTools: agent.enabledTools || [],
+        faqs: agent.faqs || []
       });
     } else {
       setFormData({
         name: '',
         character: 'เป็นเพื่อนผู้หญิงน่ารัก คอยช่วยเหลือ ใจดี',
         actions: 'ให้ตอบสั้น ๆ เหมือนคุยกับเพื่อน ให้พูดไพเราะ ลงท้ายด้วยค่ะ แทนตัวเองว่า เอวา',
-        enabledTools: []
+        enabledTools: [],
+        faqs: []
       });
     }
   }, [agent]);
@@ -54,6 +57,29 @@ export default function AgentModal({
       enabledTools: prev.enabledTools.includes(toolId)
         ? prev.enabledTools.filter(id => id !== toolId)
         : [...prev.enabledTools, toolId]
+    }));
+  };
+
+  const addFaq = () => {
+    setFormData(prev => ({
+      ...prev,
+      faqs: [...prev.faqs, { question: '', answer: '', id: crypto.randomUUID() }]
+    }));
+  };
+
+  const updateFaq = (id, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      faqs: prev.faqs.map(faq => 
+        faq.id === id ? { ...faq, [field]: value } : faq
+      )
+    }));
+  };
+
+  const removeFaq = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      faqs: prev.faqs.filter(faq => faq.id !== id)
     }));
   };
 
@@ -92,7 +118,7 @@ export default function AgentModal({
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
                 {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -133,6 +159,59 @@ export default function AgentModal({
                     rows="3"
                     placeholder="Define how the agent should behave"
                   />
+                </div>
+
+                {/* FAQs Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Frequently Asked Questions
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addFaq}
+                      className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-sky-100 text-sky-600 rounded-lg hover:bg-sky-200 transition-colors"
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                      <span>Add FAQ</span>
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {formData.faqs.map((faq, index) => (
+                      <div key={faq.id} className="p-4 border rounded-lg bg-gray-50">
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="text-sm font-medium text-gray-500">FAQ #{index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeFaq(faq.id)}
+                            className="p-1 text-red-500 hover:bg-red-100 rounded-lg transition-colors"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <input
+                              type="text"
+                              value={faq.question}
+                              onChange={(e) => updateFaq(faq.id, 'question', e.target.value)}
+                              placeholder="Enter question"
+                              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <textarea
+                              value={faq.answer}
+                              onChange={(e) => updateFaq(faq.id, 'answer', e.target.value)}
+                              placeholder="Enter answer"
+                              rows="2"
+                              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Available Tools */}
