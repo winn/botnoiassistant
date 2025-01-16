@@ -1,7 +1,7 @@
 import { toast } from 'react-hot-toast';
 import { processChatWithFunctions } from './toolsService';
 import { supabase } from '../lib/supabase';
-import { loadAgentConversations } from './storage';
+import { loadAgentConversations, saveConversation } from './storage';
 
 export async function processAIResponse(
   input, 
@@ -68,26 +68,15 @@ Instructions for Tool Usage:
   try {
     const result = await processChatWithFunctions(messages, tools, apiKey, onStream);
     
-    if (result && useSupabase) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        const { error } = await supabase
-          .from('conversations')
-          .insert([{
-            agent_id: conversationHistory[0]?.agentId || 'default',
-            user_input: input,
-            ai_response: result.response,
-            debug_info: result.debug,
-            user_id: user?.id
-          }]);
+    if (result) {
+      const conversation = {
+        agentId: conversationHistory[0]?.agentId || 'default',
+        userInput: input,
+        aiResponse: result.response,
+        debug: result.debug
+      };
 
-        if (error) {
-          console.warn('Error storing conversation:', error);
-        }
-      } catch (err) {
-        console.warn('Failed to store conversation:', err);
-      }
+      await saveConversation(conversation.agentId, conversation);
     }
 
     return result;
@@ -105,24 +94,5 @@ export async function loadConversationHistory(agentId) {
 
 export async function clearConversationHistory(agentId) {
   if (!agentId) return false;
-
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
-
-    const { error } = await supabase
-      .from('conversations')
-      .delete()
-      .eq('agent_id', agentId)
-      .eq('user_id', user.id);
-
-    if (error) {
-      console.warn('Error clearing conversations:', error);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.warn('Failed to clear conversations:', error);
-    return false;
-  }
+  return await clearConversations(agentId);
 }
