@@ -8,8 +8,11 @@ import ChatHistory from './components/ChatHistory';
 import AgentModal from './components/AgentModal';
 import ToolModal from './components/ToolModal';
 import ClearHistoryModal from './components/ClearHistoryModal';
+import AuthModal from './components/auth/AuthModal';
+import UserMenu from './components/auth/UserMenu';
 import { processAIResponse, loadConversationHistory, clearConversationHistory } from './services/api';
 import { saveAgent, loadAgents, saveTool, loadTools, saveSetting, loadSetting } from './services/storage';
+import { supabase } from './lib/supabase';
 
 // Default agent configuration
 const DEFAULT_AGENT = {
@@ -38,6 +41,8 @@ function App() {
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [useSupabase, setUseSupabase] = useState(true);
+  const [user, setUser] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const inputRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -65,6 +70,21 @@ function App() {
       }
     }
     loadInitialData();
+  }, []);
+
+  // Auth effect
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Save API key to settings when it changes
@@ -325,6 +345,10 @@ function App() {
             <div className="text-gray-600 font-medium">
               {currentTime.toLocaleTimeString()}
             </div>
+            <UserMenu 
+              user={user}
+              onLoginClick={() => setIsAuthModalOpen(true)}
+            />
             <TopMenu
               apiKey={apiKey}
               setApiKey={setApiKey}
@@ -388,6 +412,10 @@ function App() {
         isOpen={isClearHistoryModalOpen}
         onClose={() => setIsClearHistoryModalOpen(false)}
         onConfirm={handleClearHistory}
+      />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
     </div>
   );
