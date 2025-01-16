@@ -4,6 +4,12 @@ import { toast } from 'react-hot-toast';
 // Save or update an agent
 export async function saveAgent(agent) {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in to save agents');
+      return null;
+    }
+
     // Ensure agent has a valid UUID
     const agentData = {
       id: agent.id || crypto.randomUUID(),
@@ -11,7 +17,9 @@ export async function saveAgent(agent) {
       character: agent.character,
       actions: agent.actions,
       enabled_tools: agent.enabledTools || [],
-      faqs: agent.faqs || []
+      faqs: agent.faqs || [],
+      user_id: user.id,
+      is_public: false // Default to private
     };
 
     const { data, error } = await supabase
@@ -35,12 +43,15 @@ export async function saveAgent(agent) {
   }
 }
 
-// Load all agents
+// Load all agents for the current user
 export async function loadAgents() {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const { data, error } = await supabase
       .from('agents')
       .select('*')
+      .or(`user_id.eq.${user?.id},is_public.eq.true`)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
@@ -60,6 +71,12 @@ export async function loadAgents() {
 // Save or update a tool
 export async function saveTool(tool) {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in to save tools');
+      return null;
+    }
+
     const toolData = {
       id: tool.id || crypto.randomUUID(),
       name: tool.name,
@@ -69,7 +86,9 @@ export async function saveTool(tool) {
       method: tool.method,
       endpoint: tool.endpoint,
       headers: tool.headers || '{}',
-      body_template: tool.body || '{}'
+      body_template: tool.body || '{}',
+      user_id: user.id,
+      is_public: false // Default to private
     };
 
     const { data, error } = await supabase
@@ -94,12 +113,15 @@ export async function saveTool(tool) {
   }
 }
 
-// Load all tools
+// Load all tools for the current user
 export async function loadTools() {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const { data, error } = await supabase
       .from('tools')
       .select('*')
+      .or(`user_id.eq.${user?.id},is_public.eq.true`)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
@@ -117,16 +139,20 @@ export async function loadTools() {
   }
 }
 
-// Save a setting
+// Save a setting for the current user
 export async function saveSetting(key, value) {
   if (!key) return false;
   
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
     const { error } = await supabase
       .from('settings')
       .upsert({ 
         key,
-        value: typeof value === 'string' ? value : JSON.stringify(value)
+        value: typeof value === 'string' ? value : JSON.stringify(value),
+        user_id: user.id
       });
 
     if (error) throw error;
@@ -137,20 +163,23 @@ export async function saveSetting(key, value) {
   }
 }
 
-// Load a setting
+// Load a setting for the current user
 export async function loadSetting(key) {
   if (!key) return null;
   
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
     const { data, error } = await supabase
       .from('settings')
       .select('value')
       .eq('key', key)
-      .maybeSingle(); // Use maybeSingle instead of single to handle missing settings
+      .eq('user_id', user.id)
+      .maybeSingle();
 
     if (error) throw error;
     
-    // Return the value if it exists, otherwise null
     return data?.value || null;
   } catch (error) {
     console.warn('Failed to load setting:', error);

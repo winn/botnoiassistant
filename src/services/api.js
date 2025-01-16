@@ -73,13 +73,16 @@ Instructions for Tool Usage:
     
     if (result && useSupabase) {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
         const { error } = await supabase
           .from('conversations')
           .insert([{
             agent_id: conversationHistory[0]?.agentId || 'default',
             user_input: input,
             ai_response: result.response,
-            debug_info: result.debug
+            debug_info: result.debug,
+            user_id: user?.id
           }]);
 
         if (error) {
@@ -102,10 +105,14 @@ export async function loadConversationHistory(agentId) {
   if (!agentId) return [];
 
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
     const { data, error } = await supabase
       .from('conversations')
       .select('*')
       .eq('agent_id', agentId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -130,10 +137,14 @@ export async function clearConversationHistory(agentId) {
   if (!agentId) return false;
 
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
     const { error } = await supabase
       .from('conversations')
       .delete()
-      .eq('agent_id', agentId);
+      .eq('agent_id', agentId)
+      .eq('user_id', user.id);
 
     if (error) {
       console.warn('Error clearing conversations:', error);
