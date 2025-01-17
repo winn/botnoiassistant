@@ -264,7 +264,11 @@ function App() {
 
   const handleLoginSuccess = async ({ profile, agents: newAgents, tools: newTools, conversations: newConversations, credentials }) => {
     setUserProfile(profile);
-    if (newAgents?.length > 0) setAgents(newAgents);
+    if (newAgents?.length > 0) {
+      setAgents(newAgents);
+      // Automatically select the first agent
+      setSelectedAgentId(newAgents[0].id);
+    }
     if (newTools?.length > 0) setTools(newTools);
     if (newConversations) {
       const groupedConversations = newConversations.reduce((acc, conv) => {

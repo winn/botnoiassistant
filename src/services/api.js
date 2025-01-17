@@ -1,7 +1,7 @@
 import { toast } from 'react-hot-toast';
 import { processChatWithFunctions } from './toolsService';
 import { supabase } from '../lib/supabase';
-import { loadAgentConversations, saveConversation } from './storage';
+import { loadAgentConversations, saveConversation, clearConversations } from './storage';
 
 export async function processAIResponse(
   input, 
