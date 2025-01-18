@@ -5,6 +5,7 @@ import TopBar from './TopBar';
 import ChatContainer from '../chat/ChatContainer';
 import { useChat } from '../../hooks/useChat';
 import { useAudio } from '../../hooks/useAudio';
+import { useVoiceState } from '../../hooks/useVoiceState';
 
 export default function MainLayout({
   agents,
@@ -14,34 +15,35 @@ export default function MainLayout({
   tools
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [lastInputMode, setLastInputMode] = useState('text');
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
-
+  
+  const voiceState = useVoiceState();
+  
   const { playAudio } = useAudio({
-    lastInputMode,
     onPlaybackComplete: () => {
-      console.log('Audio playback completed, lastInputMode:', lastInputMode);
-      if (lastInputMode === 'voice') {
-        setIsVoiceMode(true);
-      }
+      console.log('Audio playback completed');
+      voiceState.finishSpeaking();
     }
   });
 
   const {
-    isProcessing,
     streamingResponse,
     handleSubmit
   } = useChat({
     playAudio,
     onProcessingStart: () => {
-      setIsVoiceMode(false);
+      console.log('Processing started');
+      voiceState.startProcessing();
+    },
+    onProcessingComplete: () => {
+      console.log('Processing completed');
+      voiceState.startSpeaking();
     }
   });
 
   const currentAgent = agents.find(a => a.id === selectedAgentId);
 
   return (
-    <div className="h-screen flex bg-gray-50">
+    <div className="h-[100dvh] flex bg-gray-50 overflow-hidden">
       {/* Mobile Sidebar */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -50,7 +52,7 @@ export default function MainLayout({
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: 'spring', damping: 20 }}
-            className="fixed inset-y-0 left-0 w-80 bg-white shadow-lg z-50 md:hidden"
+            className="fixed inset-y-0 left-0 w-80 bg-white shadow-lg z-50 md:hidden overflow-y-auto"
           >
             <Sidebar
               agents={agents}
@@ -65,8 +67,8 @@ export default function MainLayout({
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <div className="hidden md:block w-80 bg-white shadow-lg">
-        <div className="h-full p-6 overflow-y-auto">
+      <div className="hidden md:block w-80 bg-white shadow-lg overflow-y-auto">
+        <div className="h-full p-6">
           <Sidebar
             agents={agents}
             selectedAgentId={selectedAgentId}
@@ -78,21 +80,23 @@ export default function MainLayout({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar
-          onOpenSidebar={() => setIsSidebarOpen(true)}
-          currentAgent={currentAgent}
-        />
-        <div className="flex-1 overflow-hidden p-4">
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        {/* Fixed TopBar */}
+        <div className="sticky top-0 z-10">
+          <TopBar
+            onOpenSidebar={() => setIsSidebarOpen(true)}
+            currentAgent={currentAgent}
+          />
+        </div>
+        
+        {/* Scrollable Chat Area */}
+        <div className="flex-1 overflow-hidden">
           <ChatContainer
             agent={currentAgent}
             tools={tools}
-            isProcessing={isProcessing}
+            voiceState={voiceState}
             streamingResponse={streamingResponse}
             onSubmit={handleSubmit}
-            setLastInputMode={setLastInputMode}
-            isVoiceMode={isVoiceMode}
-            setIsVoiceMode={setIsVoiceMode}
           />
         </div>
       </div>

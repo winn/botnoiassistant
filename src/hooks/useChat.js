@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast';
 import { processAIResponse } from '../services/api';
 import { useSettings } from '../contexts/SettingsContext';
 
-export function useChat({ playAudio, onProcessingStart }) {
+export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamingResponse, setStreamingResponse] = useState('');
   const { apiKey, isSpeakerOn } = useSettings();
@@ -26,10 +26,13 @@ export function useChat({ playAudio, onProcessingStart }) {
     // Then play TTS if enabled
     if (isSpeakerOn) {
       console.log('Speaker is on, playing audio');
+      onProcessingComplete(); // Signal processing complete before playing audio
       const isPlaying = await playAudio(result.response);
       if (!isPlaying) {
         console.log('TTS failed or was not started');
       }
+    } else {
+      onProcessingComplete(); // Signal processing complete if no audio
     }
   };
 
@@ -62,7 +65,7 @@ export function useChat({ playAudio, onProcessingStart }) {
       }));
 
       setIsProcessing(true);
-      onProcessingStart?.();
+      onProcessingStart();
       
       try {
         const enabledTools = tools.filter(tool => 
@@ -86,6 +89,7 @@ export function useChat({ playAudio, onProcessingStart }) {
       } catch (error) {
         console.error('Error processing input:', error);
         toast.error(error.message || 'Failed to process input');
+        onProcessingComplete(); // Signal processing complete on error
       } finally {
         setIsProcessing(false);
         setStreamingResponse('');

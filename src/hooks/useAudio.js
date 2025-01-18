@@ -2,26 +2,38 @@ import { useRef, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 
-export function useAudio({ lastInputMode, onPlaybackComplete }) {
+export function useAudio({ onPlaybackComplete }) {
   const audioRef = useRef(null);
-  const audioEndedCallbackRef = useRef(null);
-  const { botnoiToken } = useSettings();
+  const { botnoiToken, isSpeakerOn } = useSettings();
 
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
-        if (audioEndedCallbackRef.current) {
-          audioRef.current.removeEventListener('ended', audioEndedCallbackRef.current);
-        }
       }
     };
   }, []);
 
   const playAudio = async (text) => {
+    if (!isSpeakerOn) {
+      console.log('Speaker is off, skipping TTS');
+      onPlaybackComplete?.();
+      return false;
+    }
+
     console.log('Starting TTS with text:', text);
+    
     if (!botnoiToken) {
+      console.error('Missing Botnoi token');
       toast.error('Please enter your Botnoi Voice token in settings');
+      onPlaybackComplete?.();
+      return false;
+    }
+
+    if (!text?.trim()) {
+      console.error('Empty text provided to TTS');
+      toast.error('No text to convert to speech');
+      onPlaybackComplete?.();
       return false;
     }
 
@@ -29,9 +41,6 @@ export function useAudio({ lastInputMode, onPlaybackComplete }) {
       // Cleanup previous audio
       if (audioRef.current) {
         audioRef.current.pause();
-        if (audioEndedCallbackRef.current) {
-          audioRef.current.removeEventListener('ended', audioEndedCallbackRef.current);
-        }
       }
 
       const response = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
@@ -41,7 +50,7 @@ export function useAudio({ lastInputMode, onPlaybackComplete }) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          text,
+          text: text.trim(),
           speaker: "1",
           volume: 1,
           speed: 1,
@@ -51,35 +60,61 @@ export function useAudio({ lastInputMode, onPlaybackComplete }) {
         })
       });
 
-      const result = await response.json();
-      console.log('TTS API response:', result);
+      const responseData = await response.json();
+      console.log('TTS API response:', responseData);
 
-      if (result.audio_url) {
-        const audio = new Audio(result.audio_url);
-        audioRef.current = audio;
-
-        // Create and store the callback
-        const onEnded = () => {
-          console.log('Audio playback completed');
-          onPlaybackComplete?.();
-        };
-        audioEndedCallbackRef.current = onEnded;
-
-        // Add event listener
-        audio.addEventListener('ended', onEnded);
-
-        // Start playback
-        console.log('Starting audio playback...');
-        await audio.play();
-        return true; // Audio is playing
-      } else {
-        throw new Error('Failed to get audio URL');
+      if (!response.ok) {
+        throw new Error(responseData.message || `API request failed with status ${response.status}`);
       }
+
+      if (!responseData.audio_url) {
+        throw new Error('No audio URL in API response');
+      }
+
+      const audio = new Audio(responseData.audio_url);
+      audioRef.current = audio;
+
+      // Add error handling for audio loading
+      audio.onerror = (e) => {
+        console.error('Audio loading error:', e);
+        toast.error('Failed to load audio file');
+        onPlaybackComplete?.();
+      };
+
+      // Add event listeners before playing
+      const handleEnded = () => {
+        console.log('Audio playback completed');
+        onPlaybackComplete?.();
+      };
+
+      const handleError = (e) => {
+        console.error('Audio playback error:', e);
+        toast.error('Audio playback failed');
+        onPlaybackComplete?.();
+      };
+
+      audio.addEventListener('ended', handleEnded, { once: true });
+      audio.addEventListener('error', handleError, { once: true });
+
+      // Start playback
+      await audio.play();
+      return true;
+
     } catch (error) {
-      console.error('TTS Error:', error);
-      toast.error('Failed to generate speech');
+      console.error('TTS Error:', error.message || error);
+      let errorMessage = 'Failed to generate speech';
+      
+      if (error.message?.includes('401')) {
+        errorMessage = 'Invalid Botnoi Voice token';
+      } else if (error.message?.includes('429')) {
+        errorMessage = 'Too many requests. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
       onPlaybackComplete?.();
-      return false; // Audio failed to play
+      return false;
     }
   };
 

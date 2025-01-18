@@ -4,6 +4,7 @@ import { XMarkIcon } from '@heroicons/react/24/solid';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { loadUserProfile, loadAgents, loadTools, loadCredential } from '../../services/storage';
+import { useSettings } from '../../contexts/SettingsContext';
 
 export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,6 +15,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
     fullName: ''
   });
   const [loading, setLoading] = useState(false);
+  const { setApiKey, setBotnoiToken } = useSettings();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,19 +30,24 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         if (error) throw error;
 
         // Load user data after successful login
-        const [profile, agents, tools, openaiKey] = await Promise.all([
+        const [profile, agents, tools, openaiKey, botnoiToken] = await Promise.all([
           loadUserProfile(),
           loadAgents(),
           loadTools(),
-          loadCredential('openai')
+          loadCredential('openai'),
+          loadCredential('botnoi')
         ]);
+
+        // Update credentials in SettingsContext
+        if (openaiKey) setApiKey(openaiKey);
+        if (botnoiToken) setBotnoiToken(botnoiToken);
 
         onLoginSuccess?.({ 
           user: data.user,
           profile, 
           agents, 
-          tools, 
-          credentials: { openaiKey } 
+          tools,
+          credentials: { openaiKey, botnoiToken }
         });
         toast.success('Successfully logged in!');
       } else {

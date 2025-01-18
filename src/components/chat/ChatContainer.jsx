@@ -8,42 +8,41 @@ import { useSettings } from '../../contexts/SettingsContext';
 export default function ChatContainer({ 
   agent,
   tools,
-  isProcessing,
+  voiceState,
   streamingResponse,
-  onSubmit,
-  setLastInputMode,
-  isVoiceMode,
-  setIsVoiceMode
+  onSubmit
 }) {
   const chatEndRef = useRef(null);
   const { conversations, setConversations } = useChat();
   const { useSupabase } = useSettings();
 
   const handleSubmit = (input) => {
-    setLastInputMode(isVoiceMode ? 'voice' : 'text');
     onSubmit(input, agent, conversations, setConversations, tools, useSupabase);
   };
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="h-full flex flex-col bg-white">
       {/* Chat History */}
       <div className="flex-1 overflow-y-auto">
         <ChatHistory
           conversations={conversations}
           agentId={agent?.id}
-          isProcessing={isProcessing}
+          isProcessing={voiceState.isProcessing}
           streamingText={streamingResponse}
         />
         <div ref={chatEndRef} />
       </div>
       
-      {/* Chat Input */}
-      <ChatInput
-        isProcessing={isProcessing}
-        onSubmit={handleSubmit}
-        isVoiceMode={isVoiceMode}
-        setIsVoiceMode={setIsVoiceMode}
-      />
+      {/* Fixed Chat Input */}
+      <div className="sticky bottom-0 w-full bg-white border-t shadow-sm">
+        <ChatInput
+          onSubmit={handleSubmit}
+          voiceState={voiceState}
+          startListening={voiceState.startListening}
+          stopListening={voiceState.stopListening}
+          setLastInputMode={voiceState.setLastInputMode}
+        />
+      </div>
     </div>
   );
 }

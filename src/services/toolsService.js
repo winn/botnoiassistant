@@ -26,11 +26,10 @@ export function convertToolToFunction(tool) {
       };
     }
 
-    // Sanitize the function name to only include valid characters
     const sanitizedName = tool.name
       .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, '_') // Replace invalid characters with underscore
-      .replace(/^[^a-z]/, 'fn_'); // Ensure name starts with a letter
+      .replace(/[^a-z0-9_-]/g, '_')
+      .replace(/^[^a-z]/, 'fn_');
 
     return {
       name: sanitizedName,
@@ -93,6 +92,40 @@ export async function executeToolFunction(tool, parameters) {
   }
 }
 
+async function* streamResponse(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        if (line.trim() === 'data: [DONE]') continue;
+
+        try {
+          const json = JSON.parse(line.replace(/^data: /, ''));
+          const content = json.choices[0]?.delta?.content || '';
+          if (content) {
+            yield content;
+          }
+        } catch (error) {
+          console.error('Error parsing stream:', error);
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function processChatWithFunctions(messages, tools, apiKey, onStream) {
   try {
     if (!apiKey) {
@@ -120,9 +153,9 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
     debug.functions = functions;
 
-    // First request without streaming to check for function calls
+    // First request to check for function calls
     const initialRequest = {
-      model: 'gpt-4o-mini',
+      model: 'gpt-4',
       messages: validMessages,
       temperature: 0.7,
       stream: false,
@@ -173,152 +206,63 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
         throw error;
       }
 
-      // Parse function arguments
       const args = JSON.parse(message.function_call.arguments);
-
-      // Execute the function
       const functionResult = await executeToolFunction(tool, args);
       debug.functionResult = functionResult;
 
-      // Add function call and result to messages
       validMessages.push(message);
       validMessages.push({
         role: 'function',
         name: functionName,
         content: JSON.stringify(functionResult)
       });
-
-      // Make final request with streaming for the response
-      const finalRequest = {
-        model: 'gpt-4o-mini',
-        messages: validMessages,
-        temperature: 0.7,
-        stream: true
-      };
-
-      debug.finalRequest = finalRequest;
-
-      const finalResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(finalRequest)
-      });
-
-      if (!finalResponse.ok) {
-        const errorData = await finalResponse.json().catch(() => null);
-        const error = new Error(
-          errorData?.error?.message || 
-          `OpenAI API failed with status ${finalResponse.status}`
-        );
-        debug.error = error;
-        throw error;
-      }
-
-      const reader = finalResponse.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullResponse = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value);
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.trim() === 'data: [DONE]') continue;
-
-          try {
-            const json = JSON.parse(line.replace(/^data: /, ''));
-            const content = json.choices[0]?.delta?.content || '';
-            if (content) {
-              fullResponse += content;
-              onStream?.(content);
-            }
-          } catch (error) {
-            console.error('Error parsing stream:', error);
-          }
-        }
-      }
-
-      return {
-        response: fullResponse,
-        functionCall: {
-          name: functionName,
-          args,
-          result: functionResult
-        },
-        debug
-      };
-    } else {
-      // No function call needed, stream the response directly
-      const streamingRequest = {
-        model: 'gpt-4o-mini',
-        messages: validMessages,
-        temperature: 0.7,
-        stream: true
-      };
-
-      const streamingResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(streamingRequest)
-      });
-
-      if (!streamingResponse.ok) {
-        const errorData = await streamingResponse.json().catch(() => null);
-        const error = new Error(
-          errorData?.error?.message || 
-          `OpenAI API failed with status ${streamingResponse.status}`
-        );
-        debug.error = error;
-        throw error;
-      }
-
-      const reader = streamingResponse.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullResponse = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value);
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-          if (line.trim() === 'data: [DONE]') continue;
-
-          try {
-            const json = JSON.parse(line.replace(/^data: /, ''));
-            const content = json.choices[0]?.delta?.content || '';
-            if (content) {
-              fullResponse += content;
-              onStream?.(content);
-            }
-          } catch (error) {
-            console.error('Error parsing stream:', error);
-          }
-        }
-      }
-
-      return {
-        response: fullResponse,
-        debug
-      };
     }
+
+    // Make final streaming request
+    const finalRequest = {
+      model: 'gpt-4',
+      messages: validMessages,
+      temperature: 0.7,
+      stream: true
+    };
+
+    debug.finalRequest = finalRequest;
+
+    const streamingResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(finalRequest)
+    });
+
+    if (!streamingResponse.ok) {
+      const errorData = await streamingResponse.json().catch(() => null);
+      const error = new Error(
+        errorData?.error?.message || 
+        `OpenAI API failed with status ${streamingResponse.status}`
+      );
+      debug.error = error;
+      throw error;
+    }
+
+    let fullResponse = '';
+    for await (const chunk of streamResponse(streamingResponse)) {
+      fullResponse += chunk;
+      onStream?.(chunk);
+    }
+
+    return {
+      response: fullResponse,
+      functionCall: message.function_call ? {
+        name: message.function_call.name,
+        args: JSON.parse(message.function_call.arguments),
+        result: debug.functionResult
+      } : null,
+      debug
+    };
+
   } catch (error) {
     console.error('Error processing chat with functions:', error);
     toast.error(error.message);
