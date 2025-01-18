@@ -3,9 +3,11 @@ import { UserCircleIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-hot-toast';
+import { useModal } from '../../contexts/ModalContext';
 
-export default function UserMenu({ user, profile, onLoginClick }) {
+export default function UserMenu({ user, profile }) {
   const [isOpen, setIsOpen] = useState(false);
+  const { openAuthModal } = useModal();
 
   const handleLogout = async () => {
     try {
@@ -21,7 +23,7 @@ export default function UserMenu({ user, profile, onLoginClick }) {
   if (!user) {
     return (
       <button
-        onClick={onLoginClick}
+        onClick={openAuthModal}
         className="px-4 py-2 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
       >
         Login

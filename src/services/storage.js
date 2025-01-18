@@ -1,17 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
-// Local storage keys
-const STORAGE_KEYS = {
-  AGENTS: 'agents',
-  TOOLS: 'tools',
-  CREDENTIALS: 'credentials',
-  CONVERSATIONS: 'conversations',
-  PROFILE: 'profile'
-};
-
 // Helper functions for localStorage
-const getLocalStorage = (key, defaultValue = null) => {
+function getLocalStorage(key, defaultValue = null) {
   try {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : defaultValue;
@@ -19,35 +10,15 @@ const getLocalStorage = (key, defaultValue = null) => {
     console.error(`Error reading ${key} from localStorage:`, error);
     return defaultValue;
   }
-};
+}
 
-const setLocalStorage = (key, value) => {
+function setLocalStorage(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch (error) {
     console.error(`Error writing ${key} to localStorage:`, error);
     return false;
-  }
-};
-
-// Load user profile
-export async function loadUserProfile() {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return getLocalStorage(STORAGE_KEYS.PROFILE);
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Failed to load user profile:', error);
-    return getLocalStorage(STORAGE_KEYS.PROFILE);
   }
 }
 
@@ -58,11 +29,15 @@ export async function saveAgent(agent) {
     
     const agentData = {
       id: agent.id || crypto.randomUUID(),
-      name: agent.name,
-      character: agent.character,
-      actions: agent.actions,
+      name: agent.name.trim(),
+      character: agent.character.trim(),
+      actions: agent.actions.trim(),
       enabled_tools: agent.enabled_tools || [],
-      faqs: agent.faqs || [],
+      faqs: agent.faqs?.map(faq => ({
+        ...faq,
+        question: faq.question.trim(),
+        answer: faq.answer.trim()
+      })) || [],
       is_public: false
     };
 
@@ -77,14 +52,10 @@ export async function saveAgent(agent) {
         .single();
 
       if (error) throw error;
-      return {
-        ...data,
-        enabled_tools: data.enabled_tools || [],
-        faqs: data.faqs || []
-      };
+      return data;
     } else {
       // Store in localStorage
-      const agents = getLocalStorage(STORAGE_KEYS.AGENTS, []);
+      const agents = getLocalStorage('agents', []);
       const index = agents.findIndex(a => a.id === agentData.id);
       
       if (index !== -1) {
@@ -93,38 +64,13 @@ export async function saveAgent(agent) {
         agents.push(agentData);
       }
       
-      setLocalStorage(STORAGE_KEYS.AGENTS, agents);
+      setLocalStorage('agents', agents);
       return agentData;
     }
   } catch (error) {
     console.error('Failed to save agent:', error);
-    toast.error('Failed to save agent');
+    toast.error(error.message || 'Failed to save agent');
     return null;
-  }
-}
-
-// Load all agents
-export async function loadAgents() {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return getLocalStorage(STORAGE_KEYS.AGENTS, []);
-    
-    const { data, error } = await supabase
-      .from('agents')
-      .select('*')
-      .or(`user_id.eq.${user.id},is_public.eq.true`)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return (data || []).map(agent => ({
-      ...agent,
-      enabled_tools: agent.enabled_tools || [],
-      faqs: agent.faqs || []
-    }));
-  } catch (error) {
-    console.error('Failed to load agents:', error);
-    return getLocalStorage(STORAGE_KEYS.AGENTS, []);
   }
 }
 
@@ -135,14 +81,20 @@ export async function saveTool(tool) {
     
     const toolData = {
       id: tool.id || crypto.randomUUID(),
-      name: tool.name,
-      description: tool.description,
-      input: tool.input,
-      output: tool.output,
-      method: tool.method,
-      endpoint: tool.endpoint,
-      headers: tool.headers || '{}',
-      body_template: tool.body || '{}',
+      name: tool.name.trim(),
+      description: tool.description.trim(),
+      input: {
+        description: tool.input.description.trim(),
+        schema: typeof tool.input.schema === 'string' ? tool.input.schema : JSON.stringify(tool.input.schema)
+      },
+      output: {
+        description: tool.output.description.trim(),
+        schema: typeof tool.output.schema === 'string' ? tool.output.schema : JSON.stringify(tool.output.schema)
+      },
+      method: tool.method || 'GET',
+      endpoint: tool.endpoint.trim(),
+      headers: typeof tool.headers === 'string' ? tool.headers : JSON.stringify(tool.headers),
+      body_template: typeof tool.body_template === 'string' ? tool.body_template : JSON.stringify(tool.body_template),
       is_public: false
     };
 
@@ -157,15 +109,10 @@ export async function saveTool(tool) {
         .single();
 
       if (error) throw error;
-      return {
-        ...data,
-        input: data.input,
-        output: data.output,
-        body: data.body_template
-      };
+      return data;
     } else {
       // Store in localStorage
-      const tools = getLocalStorage(STORAGE_KEYS.TOOLS, []);
+      const tools = getLocalStorage('tools', []);
       const index = tools.findIndex(t => t.id === toolData.id);
       
       if (index !== -1) {
@@ -174,24 +121,41 @@ export async function saveTool(tool) {
         tools.push(toolData);
       }
       
-      setLocalStorage(STORAGE_KEYS.TOOLS, tools);
-      return {
-        ...toolData,
-        body: toolData.body_template
-      };
+      setLocalStorage('tools', tools);
+      return toolData;
     }
   } catch (error) {
     console.error('Failed to save tool:', error);
-    toast.error('Failed to save tool');
+    toast.error(error.message || 'Failed to save tool');
     return null;
   }
 }
 
-// Load all tools
+// Load agents
+export async function loadAgents() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return getLocalStorage('agents', []);
+    
+    const { data, error } = await supabase
+      .from('agents')
+      .select('*')
+      .or(`user_id.eq.${user.id},is_public.eq.true`)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Failed to load agents:', error);
+    return getLocalStorage('agents', []);
+  }
+}
+
+// Load tools
 export async function loadTools() {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return getLocalStorage(STORAGE_KEYS.TOOLS, []);
+    if (!user) return getLocalStorage('tools', []);
     
     const { data, error } = await supabase
       .from('tools')
@@ -200,16 +164,30 @@ export async function loadTools() {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-
-    return (data || []).map(tool => ({
-      ...tool,
-      input: tool.input,
-      output: tool.output,
-      body: tool.body_template
-    }));
+    return data || [];
   } catch (error) {
     console.error('Failed to load tools:', error);
-    return getLocalStorage(STORAGE_KEYS.TOOLS, []);
+    return getLocalStorage('tools', []);
+  }
+}
+
+// Load user profile
+export async function loadUserProfile() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Failed to load user profile:', error);
+    return null;
   }
 }
 
@@ -232,9 +210,9 @@ export async function saveCredential(name, value) {
       if (error) throw error;
     } else {
       // Store in localStorage
-      const credentials = getLocalStorage(STORAGE_KEYS.CREDENTIALS, {});
+      const credentials = getLocalStorage('credentials', {});
       credentials[name] = value;
-      setLocalStorage(STORAGE_KEYS.CREDENTIALS, credentials);
+      setLocalStorage('credentials', credentials);
     }
     return true;
   } catch (error) {
@@ -249,7 +227,7 @@ export async function loadCredential(name) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      const credentials = getLocalStorage(STORAGE_KEYS.CREDENTIALS, {});
+      const credentials = getLocalStorage('credentials', {});
       return credentials[name] || null;
     }
 
@@ -264,110 +242,8 @@ export async function loadCredential(name) {
     return data?.value || null;
   } catch (error) {
     console.error('Failed to load credential:', error);
-    const credentials = getLocalStorage(STORAGE_KEYS.CREDENTIALS, {});
+    const credentials = getLocalStorage('credentials', {});
     return credentials[name] || null;
-  }
-}
-
-// Load conversations for a specific agent
-export async function loadAgentConversations(agentId) {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !agentId) {
-      const conversations = getLocalStorage(STORAGE_KEYS.CONVERSATIONS, {});
-      return conversations[agentId] || [];
-    }
-
-    const { data, error } = await supabase
-      .from('conversations')
-      .select(`
-        *,
-        agents:agent_id (
-          name,
-          character,
-          actions,
-          enabled_tools,
-          faqs
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('agent_id', agentId)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    return (data || []).map(conv => ({
-      userInput: conv.user_input,
-      aiResponse: conv.ai_response,
-      debug: conv.debug_info,
-      timestamp: new Date(conv.created_at).getTime(),
-      agentId: conv.agent_id,
-      agentName: conv.agents?.name,
-      agent: conv.agents ? {
-        ...conv.agents,
-        enabled_tools: conv.agents.enabled_tools || [],
-        faqs: conv.agents.faqs || []
-      } : null
-    }));
-  } catch (error) {
-    console.error('Failed to load agent conversations:', error);
-    const conversations = getLocalStorage(STORAGE_KEYS.CONVERSATIONS, {});
-    return conversations[agentId] || [];
-  }
-}
-
-// Load latest conversations for all agents
-export async function loadLatestConversations() {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      // For localStorage, get all conversations and sort by timestamp
-      const conversations = getLocalStorage(STORAGE_KEYS.CONVERSATIONS, {});
-      return Object.values(conversations)
-        .flat()
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 50);
-    }
-
-    const { data, error } = await supabase
-      .from('conversations')
-      .select(`
-        *,
-        agents:agent_id (
-          name,
-          character,
-          actions,
-          enabled_tools,
-          faqs
-        )
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) throw error;
-
-    return (data || []).map(conv => ({
-      userInput: conv.user_input,
-      aiResponse: conv.ai_response,
-      debug: conv.debug_info,
-      timestamp: new Date(conv.created_at).getTime(),
-      agentId: conv.agent_id,
-      agentName: conv.agents?.name,
-      agent: conv.agents ? {
-        ...conv.agents,
-        enabled_tools: conv.agents.enabled_tools || [],
-        faqs: conv.agents.faqs || []
-      } : null
-    }));
-  } catch (error) {
-    console.error('Failed to load latest conversations:', error);
-    // Fallback to localStorage
-    const conversations = getLocalStorage(STORAGE_KEYS.CONVERSATIONS, {});
-    return Object.values(conversations)
-      .flat()
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 50);
   }
 }
 
@@ -390,7 +266,7 @@ export async function saveConversation(agentId, conversation) {
       if (error) throw error;
     } else {
       // Store in localStorage
-      const conversations = getLocalStorage(STORAGE_KEYS.CONVERSATIONS, {});
+      const conversations = getLocalStorage('conversations', {});
       if (!conversations[agentId]) {
         conversations[agentId] = [];
       }
@@ -398,12 +274,37 @@ export async function saveConversation(agentId, conversation) {
         ...conversation,
         timestamp: Date.now()
       });
-      setLocalStorage(STORAGE_KEYS.CONVERSATIONS, conversations);
+      setLocalStorage('conversations', conversations);
     }
     return true;
   } catch (error) {
     console.error('Failed to save conversation:', error);
     return false;
+  }
+}
+
+// Load conversations for an agent
+export async function loadAgentConversations(agentId) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !agentId) {
+      const conversations = getLocalStorage('conversations', {});
+      return conversations[agentId] || [];
+    }
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('agent_id', agentId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Failed to load agent conversations:', error);
+    const conversations = getLocalStorage('conversations', {});
+    return conversations[agentId] || [];
   }
 }
 
@@ -422,9 +323,9 @@ export async function clearConversations(agentId) {
       if (error) throw error;
     } else {
       // Clear from localStorage
-      const conversations = getLocalStorage(STORAGE_KEYS.CONVERSATIONS, {});
+      const conversations = getLocalStorage('conversations', {});
       conversations[agentId] = [];
-      setLocalStorage(STORAGE_KEYS.CONVERSATIONS, conversations);
+      setLocalStorage('conversations', conversations);
     }
     return true;
   } catch (error) {
