@@ -3,6 +3,19 @@ import { motion } from 'framer-motion';
 import { MicrophoneIcon, StopIcon, PaperAirplaneIcon } from '@heroicons/react/24/solid';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 
+// Helper function to detect iOS
+const isIOS = () => {
+  return [
+    'iPad Simulator',
+    'iPhone Simulator',
+    'iPod Simulator',
+    'iPad',
+    'iPhone',
+    'iPod'
+  ].includes(navigator.platform)
+  || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+};
+
 export default function ChatInput({ 
   onSubmit, 
   voiceState, 
@@ -13,6 +26,7 @@ export default function ChatInput({
   const [userInput, setUserInput] = useState('');
   const inputRef = useRef(null);
   const isListening = voiceState.isListening;
+  const isIosDevice = isIOS();
 
   const { startSpeechRecognition, stopSpeechRecognition } = useSpeechRecognition({
     onTranscriptChange: (text) => {
@@ -89,23 +103,25 @@ export default function ChatInput({
           className="flex-1 p-2 md:p-3 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
           disabled={isDisabled}
         />
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          type="button"
-          onClick={toggleSpeech}
-          className={`p-2 md:p-3 rounded-lg ${
-            isListening ? 'bg-red-500' : 'bg-sky-500'
-          } text-white`}
-          title={isListening ? 'Stop listening' : 'Start voice input'}
-          disabled={isDisabled}
-        >
-          {isListening ? (
-            <StopIcon className="h-5 w-5" />
-          ) : (
-            <MicrophoneIcon className="h-5 w-5" />
-          )}
-        </motion.button>
+        {!isIosDevice && (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            type="button"
+            onClick={toggleSpeech}
+            className={`p-2 md:p-3 rounded-lg ${
+              isListening ? 'bg-red-500' : 'bg-sky-500'
+            } text-white`}
+            title={isListening ? 'Stop listening' : 'Start voice input'}
+            disabled={isDisabled}
+          >
+            {isListening ? (
+              <StopIcon className="h-5 w-5" />
+            ) : (
+              <MicrophoneIcon className="h-5 w-5" />
+            )}
+          </motion.button>
+        )}
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}

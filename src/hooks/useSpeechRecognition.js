@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 
-const SILENCE_TIMEOUT = 2000; // 2 seconds of silence before auto-submitting
+const SILENCE_TIMEOUT = 1000; // 2 seconds of silence before auto-submitting
 
 export function useSpeechRecognition({ onTranscriptChange, onSpeechEnd }) {
   const recognitionRef = useRef(null);

@@ -7,11 +7,25 @@ import { useModal } from '../../contexts/ModalContext';
 import UserMenu from '../auth/UserMenu';
 import TopMenu from './TopMenu';
 
+// Helper function to detect iOS
+const isIOS = () => {
+  return [
+    'iPad Simulator',
+    'iPhone Simulator',
+    'iPod Simulator',
+    'iPad',
+    'iPhone',
+    'iPod'
+  ].includes(navigator.platform)
+  || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+};
+
 export default function TopBar({ onOpenSidebar, currentAgent }) {
   const { isSpeakerOn, setIsSpeakerOn } = useSettings();
   const { user, userProfile } = useAuth();
   const { clearHistory } = useChat();
   const { openClearHistoryModal } = useModal();
+  const isIosDevice = isIOS();
 
   const handleClearHistory = () => {
     if (currentAgent) {
@@ -42,14 +56,16 @@ export default function TopBar({ onOpenSidebar, currentAgent }) {
             <TrashIcon className="h-5 w-5" />
           </button>
         )}
-        <button
-          onClick={() => setIsSpeakerOn(!isSpeakerOn)}
-          className={`p-2 rounded-lg ${
-            isSpeakerOn ? 'bg-sky-100 text-sky-500' : 'text-gray-400'
-          }`}
-        >
-          {isSpeakerOn ? '🔊' : '🔇'}
-        </button>
+        {!isIosDevice && (
+          <button
+            onClick={() => setIsSpeakerOn(!isSpeakerOn)}
+            className={`p-2 rounded-lg ${
+              isSpeakerOn ? 'bg-sky-100 text-sky-500' : 'text-gray-400'
+            }`}
+          >
+            {isSpeakerOn ? '🔊' : '🔇'}
+          </button>
+        )}
         <UserMenu 
           user={user}
           profile={userProfile}

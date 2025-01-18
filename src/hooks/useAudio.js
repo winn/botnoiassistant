@@ -2,9 +2,23 @@ import { useRef, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useSettings } from '../contexts/SettingsContext';
 
+// Helper function to detect iOS
+const isIOS = () => {
+  return [
+    'iPad Simulator',
+    'iPhone Simulator',
+    'iPod Simulator',
+    'iPad',
+    'iPhone',
+    'iPod'
+  ].includes(navigator.platform)
+  || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+};
+
 export function useAudio({ onPlaybackComplete }) {
   const audioRef = useRef(null);
   const { botnoiToken, isSpeakerOn } = useSettings();
+  const isIosDevice = isIOS();
 
   useEffect(() => {
     return () => {
@@ -15,6 +29,12 @@ export function useAudio({ onPlaybackComplete }) {
   }, []);
 
   const playAudio = async (text) => {
+    if (isIosDevice) {
+      console.log('TTS disabled on iOS devices');
+      onPlaybackComplete?.();
+      return false;
+    }
+
     if (!isSpeakerOn) {
       console.log('Speaker is off, skipping TTS');
       onPlaybackComplete?.();
