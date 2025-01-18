@@ -14,7 +14,7 @@ export default function AgentModal({
     name: '',
     character: '',
     actions: '',
-    enabledTools: [],
+    enabled_tools: [],
     faqs: []
   });
 
@@ -24,7 +24,7 @@ export default function AgentModal({
         name: agent.name,
         character: agent.character,
         actions: agent.actions,
-        enabledTools: agent.enabledTools || [],
+        enabled_tools: agent.enabled_tools || [],
         faqs: agent.faqs || []
       });
     } else {
@@ -32,7 +32,7 @@ export default function AgentModal({
         name: '',
         character: 'เป็นเพื่อนผู้หญิงน่ารัก คอยช่วยเหลือ ใจดี',
         actions: 'ให้ตอบสั้น ๆ เหมือนคุยกับเพื่อน ให้พูดไพเราะ ลงท้ายด้วยค่ะ แทนตัวเองว่า เอวา',
-        enabledTools: [],
+        enabled_tools: [],
         faqs: []
       });
     }
@@ -54,9 +54,9 @@ export default function AgentModal({
   const toggleTool = (toolId) => {
     setFormData(prev => ({
       ...prev,
-      enabledTools: prev.enabledTools.includes(toolId)
-        ? prev.enabledTools.filter(id => id !== toolId)
-        : [...prev.enabledTools, toolId]
+      enabled_tools: prev.enabled_tools.includes(toolId)
+        ? prev.enabled_tools.filter(id => id !== toolId)
+        : [...prev.enabled_tools, toolId]
     }));
   };
 
@@ -127,7 +127,7 @@ export default function AgentModal({
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, name: e .target.value })}
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                     placeholder="Enter agent name"
                   />
@@ -228,7 +228,7 @@ export default function AgentModal({
                         <input
                           type="checkbox"
                           id={`tool-${tool.id}`}
-                          checked={formData.enabledTools.includes(tool.id)}
+                          checked={formData.enabled_tools.includes(tool.id)}
                           onChange={() => toggleTool(tool.id)}
                           className="h-4 w-4 text-sky-500 rounded border-gray-300 focus:ring-sky-500"
                         />

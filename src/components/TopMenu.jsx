@@ -4,7 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { saveCredential } from '../services/storage';
 import { toast } from 'react-hot-toast';
 
-export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase }) {
+export default function TopMenu({ 
+  apiKey, 
+  setApiKey, 
+  useSupabase, 
+  setUseSupabase,
+  botnoiToken,
+  setBotnoiToken
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -27,6 +34,18 @@ export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase
       const saved = await saveCredential('openai', newApiKey);
       if (saved) {
         toast.success('API key saved successfully');
+      }
+    }
+  };
+
+  const handleBotnoiTokenChange = async (e) => {
+    const newToken = e.target.value;
+    setBotnoiToken(newToken);
+    
+    if (newToken) {
+      const saved = await saveCredential('botnoi', newToken);
+      if (saved) {
+        toast.success('Botnoi token saved successfully');
       }
     }
   };
@@ -60,6 +79,18 @@ export default function TopMenu({ apiKey, setApiKey, useSupabase, setUseSupabase
                   onChange={handleApiKeyChange}
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
                   placeholder="Enter your OpenAI API key"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Botnoi Voice Token
+                </label>
+                <input
+                  type="password"
+                  value={botnoiToken}
+                  onChange={handleBotnoiTokenChange}
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                  placeholder="Enter your Botnoi Voice token"
                 />
               </div>
               <div>

@@ -14,21 +14,19 @@ import { processAIResponse, loadConversationHistory, clearConversationHistory } 
 import { saveAgent, loadAgents, saveTool, loadTools, loadCredential, loadUserProfile } from './services/storage';
 import { supabase } from './lib/supabase';
 
-// Default agent configuration
 const DEFAULT_AGENT = {
   id: crypto.randomUUID(),
   name: 'Eva',
   character: 'เป็นเพื่อนผู้หญิงน่ารัก คอยช่วยเหลือ ใจดี',
   actions: 'ให้ตอบสั้น ๆ เหมือนคุยกับเพื่อน ให้พูดไพเราะ ลงท้ายด้วยค่ะ แทนตัวเองว่า เอวา',
-  enabledTools: [],
+  enabled_tools: [],
   faqs: []
 };
 
 function App() {
-  const [userInput, setUserInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [botnoiToken, setBotnoiToken] = useState('');
   const [conversations, setConversations] = useState({});
   const [streamingResponse, setStreamingResponse] = useState('');
   const [agents, setAgents] = useState([DEFAULT_AGENT]);
@@ -43,38 +41,45 @@ function App() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [lastInputMode, setLastInputMode] = useState('text');
+  const [userInput, setUserInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const inputRef = useRef(null);
   const chatEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
+  const lastSpeechRef = useRef(Date.now());
+  const finalTranscriptRef = useRef('');
+  const audioRef = useRef(null);
+  const audioEndedCallbackRef = useRef(null);
 
   // Load initial data from Supabase
   useEffect(() => {
     async function loadInitialData() {
       try {
-        // Load API key from credentials
+        // Load API keys from credentials
         const savedApiKey = await loadCredential('openai');
-        if (savedApiKey) {
-          setApiKey(savedApiKey);
-        }
+        const savedBotnoiToken = await loadCredential('botnoi');
+        if (savedApiKey) setApiKey(savedApiKey);
+        if (savedBotnoiToken) setBotnoiToken(savedBotnoiToken);
 
         // Load agents
         const loadedAgents = await loadAgents();
-        if (loadedAgents && loadedAgents.length > 0) {
+        if (loadedAgents?.length > 0) {
           setAgents(loadedAgents);
           setSelectedAgentId(loadedAgents[0].id);
         }
 
         // Load tools
         const loadedTools = await loadTools();
-        if (loadedTools) {
-          setTools(loadedTools);
-        }
+        if (loadedTools) setTools(loadedTools);
 
         // Load user profile if logged in
         const profile = await loadUserProfile();
-        if (profile) {
-          setUserProfile(profile);
-        }
+        if (profile) setUserProfile(profile);
       } catch (error) {
         console.error('Error loading initial data:', error);
       }
@@ -84,12 +89,10 @@ function App() {
 
   // Auth effect
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -113,11 +116,240 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversations, streamingResponse]);
 
-  const handleSubmit = async (e) => {
+  // Cleanup effect for audio and recognition
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        if (audioEndedCallbackRef.current) {
+          audioRef.current.removeEventListener('ended', audioEndedCallbackRef.current);
+        }
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const playAudio = async (text) => {
+    console.log('Starting TTS with text:', text);
+    if (!botnoiToken) {
+      toast.error('Please enter your Botnoi Voice token in settings');
+      return;
+    }
+
+    try {
+      // Cleanup previous audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        if (audioEndedCallbackRef.current) {
+          audioRef.current.removeEventListener('ended', audioEndedCallbackRef.current);
+        }
+      }
+
+      const response = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
+        method: 'POST',
+        headers: {
+          'Botnoi-Token': botnoiToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text,
+          speaker: "1",
+          volume: 1,
+          speed: 1,
+          type_media: "mp3",
+          save_file: true,
+          language: "th"
+        })
+      });
+
+      const result = await response.json();
+      console.log('TTS API response:', result);
+
+      if (result.audio_url) {
+        const audio = new Audio(result.audio_url);
+        audioRef.current = audio;
+
+        // Create and store the callback
+        const onEnded = () => {
+          console.log('Audio ended, lastInputMode:', lastInputMode);
+          if (lastInputMode === 'voice') {
+            console.log('Starting speech recognition after audio');
+            startSpeechRecognition();
+          }
+        };
+        audioEndedCallbackRef.current = onEnded;
+
+        // Add event listener
+        audio.addEventListener('ended', onEnded);
+
+        console.log('Playing audio...');
+        await audio.play();
+      } else {
+        throw new Error('Failed to get audio URL');
+      }
+    } catch (error) {
+      console.error('TTS Error:', error);
+      toast.error('Failed to generate speech');
+      // Even if TTS fails, start listening if last input was voice
+      if (lastInputMode === 'voice') {
+        console.log('Starting speech recognition after TTS error');
+        startSpeechRecognition();
+      }
+    }
+  };
+
+  const processResponse = async (result, agentId, timestamp) => {
+    console.log('Processing response, lastInputMode:', lastInputMode);
+    // Update conversations first
+    setConversations(prev => ({
+      ...prev,
+      [agentId]: prev[agentId].map(conv => 
+        conv.timestamp === timestamp
+          ? {
+              ...conv,
+              aiResponse: result.response,
+              debug: result.debug
+            }
+          : conv
+      )
+    }));
+
+    // Then play TTS if enabled
+    if (isSpeakerOn) {
+      console.log('Speaker is on, playing audio');
+      await playAudio(result.response);
+    } else if (lastInputMode === 'voice') {
+      console.log('Speaker is off but last input was voice, starting recognition');
+      startSpeechRecognition();
+    }
+  };
+
+  const toggleSpeech = () => {
+    console.log('Toggling speech, current state:', isListening);
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    } else {
+      setLastInputMode('voice');
+      startSpeechRecognition();
+    }
+  };
+
+  const startSpeechRecognition = () => {
+    console.log('Starting speech recognition');
+    if (!('webkitSpeechRecognition' in window)) {
+      toast.error('Speech recognition is not supported in this browser');
+      return;
+    }
+
+    // Cleanup previous instance
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+
+    const recognition = new window.webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'th-TH';
+
+    recognition.onstart = () => {
+      console.log('Speech recognition started');
+      setIsListening(true);
+      finalTranscriptRef.current = '';
+      lastSpeechRef.current = Date.now();
+      silenceTimeoutRef.current = setTimeout(checkSilence, 500);
+    };
+
+    recognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+          lastSpeechRef.current = Date.now();
+          console.log('Final transcript:', finalTranscript);
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        finalTranscriptRef.current = finalTranscript;
+        setUserInput(finalTranscript);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    };
+
+    recognition.onend = () => {
+      console.log('Speech recognition ended');
+      setIsListening(false);
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const checkSilence = () => {
+    const now = Date.now();
+    const timeSinceLastSpeech = now - lastSpeechRef.current;
+    console.log('Checking silence, time since last speech:', timeSinceLastSpeech);
+
+    if (timeSinceLastSpeech > 2000 && finalTranscriptRef.current.trim()) {
+      console.log('Silence detected with transcript:', finalTranscriptRef.current);
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        if (!apiKey) {
+          toast.error('Please enter your OpenAI API key in settings');
+          return;
+        }
+        const transcript = finalTranscriptRef.current.trim();
+        setUserInput(transcript);
+        handleSubmit({ preventDefault: () => {} }, transcript);
+      }
+    } else if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = setTimeout(checkSilence, 500);
+    }
+  };
+
+  const handleSubmit = async (e, forcedInput = null) => {
     e.preventDefault();
-    if (!isProcessing && userInput.trim()) {
-      const currentInput = userInput.trim();
+    const currentInput = forcedInput || userInput.trim();
+    console.log('Submitting input:', currentInput, 'Forced:', !!forcedInput);
+    
+    if (!isProcessing && currentInput) {
+      if (!apiKey) {
+        toast.error('Please enter your OpenAI API key in settings');
+        return;
+      }
+
+      // Update input mode based on how the input was provided
+      setLastInputMode(forcedInput ? 'voice' : 'text');
+      console.log('Setting lastInputMode to:', forcedInput ? 'voice' : 'text');
+
       setUserInput('');
+      const timestamp = Date.now();
       
       const currentAgent = agents.find(a => a.id === selectedAgentId);
       if (!currentAgent) {
@@ -125,7 +357,6 @@ function App() {
         return;
       }
       
-      const timestamp = Date.now();
       setConversations(prev => ({
         ...prev,
         [selectedAgentId]: [
@@ -143,7 +374,7 @@ function App() {
       setIsProcessing(true);
       try {
         const enabledTools = tools.filter(tool => 
-          currentAgent.enabledTools.includes(tool.id)
+          currentAgent.enabled_tools.includes(tool.id)
         );
 
         const result = await processAIResponse(
@@ -158,22 +389,16 @@ function App() {
         );
 
         if (result) {
-          setConversations(prev => ({
-            ...prev,
-            [selectedAgentId]: prev[selectedAgentId].map(conv => 
-              conv.timestamp === timestamp
-                ? {
-                    ...conv,
-                    aiResponse: result.response,
-                    debug: result.debug
-                  }
-                : conv
-            )
-          }));
+          await processResponse(result, selectedAgentId, timestamp);
         }
       } catch (error) {
         console.error('Error processing input:', error);
         toast.error(error.message || 'Failed to process input');
+        // If there's an error and last input was voice, restart listening
+        if (lastInputMode === 'voice') {
+          console.log('Restarting speech recognition after error');
+          startSpeechRecognition();
+        }
       } finally {
         setIsProcessing(false);
         setStreamingResponse('');
@@ -266,7 +491,6 @@ function App() {
     setUserProfile(profile);
     if (newAgents?.length > 0) {
       setAgents(newAgents);
-      // Automatically select the first agent
       setSelectedAgentId(newAgents[0].id);
     }
     if (newTools?.length > 0) setTools(newTools);
@@ -355,6 +579,14 @@ function App() {
           </h1>
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => setIsSpeakerOn(!isSpeakerOn)}
+              className={`p-2 rounded-lg ${
+                isSpeakerOn ? 'bg-sky-100 text-sky-500' : 'text-gray-400'
+              }`}
+            >
+              {isSpeakerOn ? '🔊' : '🔇'}
+            </button>
+            <button
               onClick={() => setIsClearHistoryModalOpen(true)}
               className="p-2 rounded-lg hover:bg-sky-100 text-sky-500"
             >
@@ -368,6 +600,8 @@ function App() {
             <TopMenu
               apiKey={apiKey}
               setApiKey={setApiKey}
+              botnoiToken={botnoiToken}
+              setBotnoiToken={setBotnoiToken}
               useSupabase={useSupabase}
               setUseSupabase={setUseSupabase}
             />
@@ -390,11 +624,29 @@ function App() {
               ref={inputRef}
               type="text"
               value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
+              onChange={(e) => {
+                setUserInput(e.target.value);
+                setLastInputMode('text');
+              }}
               placeholder="Type your message..."
               className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
               disabled={isProcessing}
             />
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              type="button"
+              onClick={toggleSpeech}
+              className={`p-2 rounded-lg ${
+                isListening ? 'bg-red-500' : 'bg-sky-500'
+              } text-white`}
+            >
+              {isListening ? (
+                <StopIcon className="h-5 w-5" />
+              ) : (
+                <MicrophoneIcon className="h-5 w-5" />
+              )}
+            </motion.button>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

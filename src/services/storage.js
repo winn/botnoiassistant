@@ -61,7 +61,7 @@ export async function saveAgent(agent) {
       name: agent.name,
       character: agent.character,
       actions: agent.actions,
-      enabledTools: agent.enabledTools || [],
+      enabled_tools: agent.enabled_tools || [],
       faqs: agent.faqs || [],
       is_public: false
     };
@@ -71,8 +71,7 @@ export async function saveAgent(agent) {
         .from('agents')
         .upsert({
           ...agentData,
-          user_id: user.id,
-          enabled_tools: agentData.enabledTools,
+          user_id: user.id
         })
         .select()
         .single();
@@ -80,7 +79,7 @@ export async function saveAgent(agent) {
       if (error) throw error;
       return {
         ...data,
-        enabledTools: data.enabled_tools || [],
+        enabled_tools: data.enabled_tools || [],
         faqs: data.faqs || []
       };
     } else {
@@ -120,7 +119,7 @@ export async function loadAgents() {
 
     return (data || []).map(agent => ({
       ...agent,
-      enabledTools: agent.enabled_tools || [],
+      enabled_tools: agent.enabled_tools || [],
       faqs: agent.faqs || []
     }));
   } catch (error) {
@@ -143,7 +142,7 @@ export async function saveTool(tool) {
       method: tool.method,
       endpoint: tool.endpoint,
       headers: tool.headers || '{}',
-      body: tool.body || '{}',
+      body_template: tool.body || '{}',
       is_public: false
     };
 
@@ -152,10 +151,7 @@ export async function saveTool(tool) {
         .from('tools')
         .upsert({
           ...toolData,
-          user_id: user.id,
-          input_schema: toolData.input,
-          output_schema: toolData.output,
-          body_template: toolData.body
+          user_id: user.id
         })
         .select()
         .single();
@@ -163,8 +159,8 @@ export async function saveTool(tool) {
       if (error) throw error;
       return {
         ...data,
-        input: data.input_schema,
-        output: data.output_schema,
+        input: data.input,
+        output: data.output,
         body: data.body_template
       };
     } else {
@@ -179,7 +175,10 @@ export async function saveTool(tool) {
       }
       
       setLocalStorage(STORAGE_KEYS.TOOLS, tools);
-      return toolData;
+      return {
+        ...toolData,
+        body: toolData.body_template
+      };
     }
   } catch (error) {
     console.error('Failed to save tool:', error);
@@ -204,8 +203,8 @@ export async function loadTools() {
 
     return (data || []).map(tool => ({
       ...tool,
-      input: tool.input_schema,
-      output: tool.output_schema,
+      input: tool.input,
+      output: tool.output,
       body: tool.body_template
     }));
   } catch (error) {
@@ -306,7 +305,7 @@ export async function loadAgentConversations(agentId) {
       agentName: conv.agents?.name,
       agent: conv.agents ? {
         ...conv.agents,
-        enabledTools: conv.agents.enabled_tools || [],
+        enabled_tools: conv.agents.enabled_tools || [],
         faqs: conv.agents.faqs || []
       } : null
     }));
@@ -357,7 +356,7 @@ export async function loadLatestConversations() {
       agentName: conv.agents?.name,
       agent: conv.agents ? {
         ...conv.agents,
-        enabledTools: conv.agents.enabled_tools || [],
+        enabled_tools: conv.agents.enabled_tools || [],
         faqs: conv.agents.faqs || []
       } : null
     }));
