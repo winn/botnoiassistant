@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ModalProvider } from './contexts/ModalContext';
+import { FeaturesProvider } from './contexts/FeaturesContext';
 import ModalContainer from './components/modals/ModalContainer';
 import { useAgents } from './hooks/useAgents';
 import { useTools } from './hooks/useTools';
@@ -37,33 +38,35 @@ function App() {
         <SettingsProvider>
           <ChatProvider>
             <ModalProvider>
-              <Routes>
-                <Route path="/shared/:shareId" element={
-                  <SharedAgentView tools={tools} />
-                } />
-                <Route path="/test/:shareId" element={
-                  <TestProxyApi />
-                } />
-                <Route path="/" element={
-                  <MainLayout
-                    agents={agents}
-                    selectedAgentId={selectedAgentId}
-                    setSelectedAgentId={setSelectedAgentId}
-                    handleDeleteAgent={handleDeleteAgent}
-                    tools={tools}
-                    onAddTool={() => {}}
-                    onEditTool={() => {}}
-                    handleDeleteTool={handleDeleteTool}
-                    isLoading={isLoading}
-                  />
-                } />
-              </Routes>
-              <ModalContainer
-                tools={tools}
-                onSaveAgent={handleSaveAgent}
-                onSaveTool={handleSaveTool}
-              />
-              <Toaster position="top-right" />
+              <FeaturesProvider>
+                <Routes>
+                  <Route path="/shared/:shareId" element={
+                    <SharedAgentView tools={tools} />
+                  } />
+                  <Route path="/test/:shareId" element={
+                    <TestProxyApi />
+                  } />
+                  <Route path="/" element={
+                    <MainLayout
+                      agents={agents}
+                      selectedAgentId={selectedAgentId}
+                      setSelectedAgentId={setSelectedAgentId}
+                      handleDeleteAgent={handleDeleteAgent}
+                      tools={tools}
+                      onAddTool={() => {}}
+                      onEditTool={() => {}}
+                      handleDeleteTool={handleDeleteTool}
+                      isLoading={isLoading}
+                    />
+                  } />
+                </Routes>
+                <ModalContainer
+                  tools={tools}
+                  onSaveAgent={handleSaveAgent}
+                  onSaveTool={handleSaveTool}
+                />
+                <Toaster position="top-right" />
+              </FeaturesProvider>
             </ModalProvider>
           </ChatProvider>
         </SettingsProvider>

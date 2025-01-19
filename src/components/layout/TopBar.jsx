@@ -7,25 +7,11 @@ import { useModal } from '../../contexts/ModalContext';
 import UserMenu from '../auth/UserMenu';
 import TopMenu from './TopMenu';
 
-// Helper function to detect iOS
-const isIOS = () => {
-  return [
-    'iPad Simulator',
-    'iPhone Simulator',
-    'iPod Simulator',
-    'iPad',
-    'iPhone',
-    'iPod'
-  ].includes(navigator.platform)
-  || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
-};
-
 export default function TopBar({ onOpenSidebar, currentAgent }) {
   const { isSpeakerOn, setIsSpeakerOn } = useSettings();
   const { user, userProfile } = useAuth();
   const { clearHistory } = useChat();
   const { openClearHistoryModal } = useModal();
-  const isIosDevice = isIOS();
 
   const handleClearHistory = () => {
     if (currentAgent) {
@@ -34,7 +20,7 @@ export default function TopBar({ onOpenSidebar, currentAgent }) {
   };
 
   return (
-    <div className="flex items-center justify-between p-2 md:p-4 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <div className="flex items-center justify-between p-2 md:p-4 bg-white/80 backdrop-blur border-b border-white/20">
       <div className="flex items-center space-x-4">
         <button
           onClick={onOpenSidebar}
@@ -42,7 +28,7 @@ export default function TopBar({ onOpenSidebar, currentAgent }) {
         >
           <Bars3Icon className="h-6 w-6" />
         </button>
-        <h1 className="text-lg md:text-xl font-bold text-gray-800 truncate">
+        <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent truncate">
           {currentAgent?.name || 'Voice Assistant'}
         </h1>
       </div>
@@ -56,16 +42,14 @@ export default function TopBar({ onOpenSidebar, currentAgent }) {
             <TrashIcon className="h-5 w-5" />
           </button>
         )}
-        {!isIosDevice && (
-          <button
-            onClick={() => setIsSpeakerOn(!isSpeakerOn)}
-            className={`p-2 rounded-lg ${
-              isSpeakerOn ? 'bg-sky-100 text-sky-500' : 'text-gray-400'
-            }`}
-          >
-            {isSpeakerOn ? '🔊' : '🔇'}
-          </button>
-        )}
+        <button
+          onClick={() => setIsSpeakerOn(!isSpeakerOn)}
+          className={`p-2 rounded-lg transition-colors ${
+            isSpeakerOn ? 'bg-sky-100 text-sky-500' : 'text-gray-400 hover:bg-gray-100'
+          }`}
+        >
+          {isSpeakerOn ? '🔊' : '🔇'}
+        </button>
         <UserMenu 
           user={user}
           profile={userProfile}

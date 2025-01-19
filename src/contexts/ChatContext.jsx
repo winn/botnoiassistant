@@ -13,13 +13,16 @@ export function ChatProvider({ children }) {
       return false;
     }
 
-    if (await clearConversationHistory(agentId)) {
+    try {
+      await clearConversationHistory(agentId);
       setConversations(prev => ({ ...prev, [agentId]: [] }));
       toast.success('Chat history cleared');
       return true;
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+      toast.error('Failed to clear chat history');
+      return false;
     }
-    toast.error('Failed to clear chat history');
-    return false;
   };
 
   const value = {

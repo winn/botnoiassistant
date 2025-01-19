@@ -17,7 +17,61 @@ export function useAgents() {
   const [selectedAgentId, setSelectedAgentId] = useState(DEFAULT_AGENT.id);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Debounced function to update sharing status
+  // Load agents on mount
+  useEffect(() => {
+    async function loadInitialAgents() {
+      try {
+        setIsLoading(true);
+        const loadedAgents = await loadAgents();
+        
+        if (loadedAgents?.length > 0) {
+          setAgents(loadedAgents);
+          setSelectedAgentId(loadedAgents[0].id);
+        } else {
+          // Save default agent if no agents exist
+          const savedAgent = await saveAgent(DEFAULT_AGENT);
+          if (savedAgent) {
+            setAgents([savedAgent]);
+            setSelectedAgentId(savedAgent.id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load agents:', error);
+        toast.error('Failed to load agents');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadInitialAgents();
+  }, []);
+
+  // Subscribe to shared_agents changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('shared_agents_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shared_agents'
+        },
+        () => {
+          // Refresh sharing status when changes occur
+          const agentIds = agents.map(a => a.id);
+          if (agentIds.length > 0) {
+            updateSharingStatus(agentIds);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [agents]);
+
+  // Update sharing status
   const updateSharingStatus = useCallback(async (agentIds) => {
     if (!agentIds?.length) return;
     
@@ -37,53 +91,6 @@ export function useAgents() {
       console.error('Error updating share status:', error);
     }
   }, []);
-
-  // Load agents on mount
-  useEffect(() => {
-    async function loadInitialAgents() {
-      try {
-        setIsLoading(true);
-        const loadedAgents = await loadAgents();
-        
-        if (loadedAgents?.length > 0) {
-          setAgents(loadedAgents);
-          setSelectedAgentId(loadedAgents[0].id);
-          
-          // Update sharing status in background
-          updateSharingStatus(loadedAgents.map(a => a.id));
-        }
-      } catch (error) {
-        console.error('Failed to load agents:', error);
-        toast.error('Failed to load agents');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadInitialAgents();
-  }, [updateSharingStatus]);
-
-  // Subscribe to shared_agents changes
-  useEffect(() => {
-    const channel = supabase
-      .channel('shared_agents_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'shared_agents'
-        },
-        () => {
-          // Refresh sharing status when changes occur
-          updateSharingStatus(agents.map(a => a.id));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [agents, updateSharingStatus]);
 
   const handleSaveAgent = async (agentData) => {
     try {
@@ -117,13 +124,23 @@ export function useAgents() {
 
       if (error) throw error;
 
-      setAgents(prev => prev.filter(a => a.id !== agentId));
-      if (selectedAgentId === agentId) {
-        const remainingAgent = agents.find(a => a.id !== agentId);
-        if (remainingAgent) {
-          setSelectedAgentId(remainingAgent.id);
+      setAgents(prev => {
+        const newAgents = prev.filter(a => a.id !== agentId);
+        // If no agents left, add default agent
+        if (newAgents.length === 0) {
+          return [DEFAULT_AGENT];
         }
+        return newAgents;
+      });
+
+      // Update selected agent if needed
+      if (selectedAgentId === agentId) {
+        setSelectedAgentId(prev => {
+          const remainingAgent = agents.find(a => a.id !== agentId);
+          return remainingAgent?.id || DEFAULT_AGENT.id;
+        });
       }
+
       toast.success('Agent deleted successfully');
       return true;
     } catch (error) {

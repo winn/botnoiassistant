@@ -76,7 +76,9 @@ Instructions for Tool Usage:
         debug: result.debug
       };
 
-      await saveConversation(conversation.agentId, conversation);
+      if (useSupabase) {
+        await saveConversation(conversation.agentId, conversation);
+      }
     }
 
     return result;

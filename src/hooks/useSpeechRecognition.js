@@ -1,51 +1,19 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
-const SILENCE_TIMEOUT = 1000; // 2 seconds of silence before auto-submitting
-
 export function useSpeechRecognition({ onTranscriptChange, onSpeechEnd }) {
+  const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
-  const silenceTimeoutRef = useRef(null);
-  const lastSpeechRef = useRef(Date.now());
-  const finalTranscriptRef = useRef('');
 
   const stopSpeechRecognition = useCallback(() => {
-    console.log('Stopping speech recognition');
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
-    }
-    if (silenceTimeoutRef.current) {
-      clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = null;
+      setIsListening(false);
     }
   }, []);
 
-  const submitTranscript = useCallback(() => {
-    const transcript = finalTranscriptRef.current.trim();
-    if (transcript) {
-      console.log('Submitting final transcript:', transcript);
-      stopSpeechRecognition();
-      onSpeechEnd?.(transcript);
-      finalTranscriptRef.current = ''; // Clear transcript after submission
-    }
-  }, [onSpeechEnd, stopSpeechRecognition]);
-
-  const checkSilence = useCallback(() => {
-    const now = Date.now();
-    const timeSinceLastSpeech = now - lastSpeechRef.current;
-    console.log('Checking silence, time since last speech:', timeSinceLastSpeech);
-
-    if (timeSinceLastSpeech > SILENCE_TIMEOUT && finalTranscriptRef.current.trim()) {
-      console.log('Silence detected with final transcript:', finalTranscriptRef.current);
-      submitTranscript();
-    } else if (recognitionRef.current) {
-      silenceTimeoutRef.current = setTimeout(checkSilence, 500);
-    }
-  }, [submitTranscript]);
-
   const startSpeechRecognition = useCallback(() => {
-    console.log('Starting speech recognition');
     if (!('webkitSpeechRecognition' in window)) {
       toast.error('Speech recognition is not supported in this browser');
       return;
@@ -57,68 +25,59 @@ export function useSpeechRecognition({ onTranscriptChange, onSpeechEnd }) {
       return;
     }
 
-    const recognition = new window.webkitSpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'th-TH';
+    const SpeechRecognition = window.webkitSpeechRecognition;
+    const newRecognition = new SpeechRecognition();
+    
+    newRecognition.continuous = false; // Changed to false to stop after each utterance
+    newRecognition.interimResults = true;
+    newRecognition.lang = 'th-TH';
 
-    recognition.onstart = () => {
+    newRecognition.onstart = () => {
       console.log('Speech recognition started');
-      finalTranscriptRef.current = '';
-      lastSpeechRef.current = Date.now();
-      silenceTimeoutRef.current = setTimeout(checkSilence, 500);
+      setIsListening(true);
     };
 
-    recognition.onresult = (event) => {
+    newRecognition.onresult = (event) => {
       let interimTranscript = '';
       let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
-          lastSpeechRef.current = Date.now();
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
         } else {
-          interimTranscript += result[0].transcript;
+          interimTranscript += transcript;
         }
       }
 
-      // Update final transcript if we have new final results
-      if (finalTranscript) {
-        finalTranscriptRef.current += finalTranscript;
-        console.log('New final transcript:', finalTranscriptRef.current);
-      }
-
       // Update display with both final and interim
-      const displayText = finalTranscriptRef.current + interimTranscript;
-      console.log('Updating display text:', displayText);
+      const displayText = finalTranscript + interimTranscript;
       onTranscriptChange?.(displayText);
-    };
 
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      stopSpeechRecognition();
-    };
-
-    recognition.onend = () => {
-      console.log('Speech recognition ended naturally');
-      stopSpeechRecognition();
-      if (finalTranscriptRef.current.trim()) {
-        submitTranscript();
+      // If we have a final transcript, submit it
+      if (finalTranscript) {
+        onSpeechEnd?.(finalTranscript);
       }
     };
 
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [checkSilence, onTranscriptChange, stopSpeechRecognition, submitTranscript]);
-
-  useEffect(() => {
-    return () => {
+    newRecognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      toast.error('Speech recognition error: ' + event.error);
       stopSpeechRecognition();
     };
-  }, [stopSpeechRecognition]);
+
+    newRecognition.onend = () => {
+      console.log('Speech recognition ended');
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = newRecognition;
+    newRecognition.start();
+  }, [onTranscriptChange, onSpeechEnd, stopSpeechRecognition]);
 
   return {
+    isListening,
     startSpeechRecognition,
     stopSpeechRecognition
   };

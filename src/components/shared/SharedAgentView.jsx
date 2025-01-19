@@ -6,7 +6,7 @@ import ChatContainer from '../chat/ChatContainer';
 import { useChat } from '../../hooks/useChat';
 import { useAudio } from '../../hooks/useAudio';
 import { useVoiceState } from '../../hooks/useVoiceState';
-import LoadingSpinner from './LoadingSpinner';
+import LoadingSpinner from './feedback/LoadingSpinner';
 
 export default function SharedAgentView({ tools }) {
   const { shareId } = useParams();
@@ -14,7 +14,6 @@ export default function SharedAgentView({ tools }) {
   const [agent, setAgent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [debugInfo, setDebugInfo] = useState(null);
   const voiceState = useVoiceState();
   
   const { playAudio } = useAudio({
@@ -39,15 +38,12 @@ export default function SharedAgentView({ tools }) {
     }
   });
 
-  // Custom submit handler for shared agent
   const handleSubmit = async (input, agent, conversations, setConversations) => {
     if (!input || !agent) return;
 
     const sessionId = crypto.randomUUID();
-    setDebugInfo(null); // Clear previous debug info
     
     try {
-      // Add user message to conversation immediately
       const timestamp = Date.now();
       setConversations(prev => ({
         ...prev,
@@ -57,20 +53,19 @@ export default function SharedAgentView({ tools }) {
             userInput: input,
             timestamp,
             agentId: agent.id,
-            agentName: agent.name
+            agentName: agent.name,
+            debug: {
+              timestamp: new Date().toISOString(),
+              sessionId,
+              shareId: agent.id,
+              input
+            }
           }
         ]
       }));
 
       voiceState.startProcessing();
 
-      console.log('Calling proxy with:', {
-        sessionId,
-        shareId: agent.id,
-        message: input
-      });
-
-      // Call proxy function
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/proxy`, {
         method: 'POST',
         headers: {
@@ -85,14 +80,22 @@ export default function SharedAgentView({ tools }) {
       });
 
       const responseData = await response.json();
-      console.log('Proxy response:', responseData);
-      setDebugInfo(responseData); // Store response for debugging
 
       if (!response.ok) {
         throw new Error(responseData.error || 'Failed to process request');
       }
 
-      // Update conversation with AI response
+      // Add debug information
+      const debug = {
+        timestamp: new Date().toISOString(),
+        sessionId,
+        shareId: agent.id,
+        input,
+        response: responseData,
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries())
+      };
+
       setConversations(prev => ({
         ...prev,
         [agent.id]: prev[agent.id].map(conv => 
@@ -101,27 +104,47 @@ export default function SharedAgentView({ tools }) {
                 ...conv,
                 aiResponse: responseData.response,
                 audioUrl: responseData.audio_url,
-                debug: {
-                  proxyResponse: responseData
-                }
+                debug
               }
             : conv
         )
       }));
 
-      // Handle audio playback
       if (responseData.audio_url) {
-        console.log('Playing audio from URL:', responseData.audio_url);
         voiceState.startSpeaking();
         await playAudio(responseData.response, responseData.audio_url);
       } else {
-        console.log('No audio URL in response');
         voiceState.finishSpeaking();
       }
 
     } catch (error) {
       console.error('Error processing request:', error);
-      setDebugInfo({ error: error.message, fullError: error }); // Store error for debugging
+      
+      // Add error to debug information
+      const debug = {
+        timestamp: new Date().toISOString(),
+        sessionId,
+        shareId: agent.id,
+        input,
+        error: {
+          message: error.message,
+          stack: error.stack
+        }
+      };
+
+      setConversations(prev => ({
+        ...prev,
+        [agent.id]: prev[agent.id].map(conv => 
+          conv.timestamp === timestamp
+            ? {
+                ...conv,
+                error: error.message,
+                debug
+              }
+            : conv
+        )
+      }));
+
       toast.error(error.message || 'Failed to process request');
       voiceState.finishSpeaking();
     }
@@ -130,7 +153,6 @@ export default function SharedAgentView({ tools }) {
   useEffect(() => {
     loadSharedAgent();
     
-    // Cleanup function to stop voice state
     return () => {
       if (voiceState.isListening) {
         voiceState.stopListening();
@@ -147,7 +169,6 @@ export default function SharedAgentView({ tools }) {
         throw new Error('No agent ID provided');
       }
 
-      // Get the public agent
       const { data: publicAgent, error: publicError } = await supabase
         .from('agents')
         .select(`
@@ -210,38 +231,26 @@ export default function SharedAgentView({ tools }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex flex-col h-[100dvh] overflow-hidden">
       {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-4">
-            <h1 className="text-2xl font-bold text-gray-800">{agent.name}</h1>
-            <p className="text-gray-600 mt-1">{agent.character}</p>
-          </div>
+      <div className="flex-shrink-0 bg-white border-b">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-2xl font-bold text-gray-800">{agent.name}</h1>
+          <p className="text-gray-600 mt-1">{agent.character}</p>
         </div>
       </div>
 
-      {/* Debug Info */}
-      {debugInfo && (
-        <div className="bg-gray-100 p-4 border-b">
-          <div className="max-w-7xl mx-auto">
-            <h2 className="text-lg font-semibold mb-2">Debug Information</h2>
-            <pre className="bg-white p-4 rounded-lg overflow-auto max-h-60 text-sm">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </div>
-        </div>
-      )}
-
       {/* Chat Container */}
-      <div className="flex-1 overflow-hidden">
-        <ChatContainer
-          agent={agent}
-          tools={tools}
-          voiceState={voiceState}
-          streamingResponse={streamingResponse}
-          onSubmit={handleSubmit}
-        />
+      <div className="flex-1 min-h-0 bg-gray-50">
+        <div className="h-full max-w-4xl mx-auto">
+          <ChatContainer
+            agent={agent}
+            tools={tools}
+            voiceState={voiceState}
+            streamingResponse={streamingResponse}
+            onSubmit={handleSubmit}
+          />
+        </div>
       </div>
     </div>
   );

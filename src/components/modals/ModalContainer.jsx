@@ -1,9 +1,9 @@
 import React from 'react';
-import AgentModal from '../agents/AgentModal';
+import AgentModal from '../agents/modals/AgentFormModal';
 import ToolModal from '../tools/ToolModal';
 import AuthModal from '../auth/AuthModal';
 import ClearHistoryModal from './ClearHistoryModal';
-import ShareAgentModal from './ShareAgentModal';
+import ShareAgentModal from '../agents/modals/ShareAgentModal';
 import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';

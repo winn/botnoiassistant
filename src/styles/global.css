@@ -1,0 +1,73 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  :root {
+    --font-sans: 'Inter var', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Cal Sans', 'Inter var', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  html {
+    @apply antialiased;
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply bg-surface-50 text-surface-900;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-600 shadow-glow hover:shadow-glow-md;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-surface-700 hover:bg-surface-50 shadow-sm hover:shadow-md border border-surface-200;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-white border border-surface-200 rounded-lg shadow-sm 
+    focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-shadow;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-glow hover:shadow-glow-md transition-shadow duration-200;
+  }
+
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20;
+  }
+
+  .nav-link {
+    @apply px-4 py-2 text-surface-600 hover:text-surface-900 rounded-lg transition-colors;
+  }
+
+  .nav-link-active {
+    @apply text-primary-600 bg-primary-50;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+}

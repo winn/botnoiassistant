@@ -8,34 +8,6 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
   const [streamingResponse, setStreamingResponse] = useState('');
   const { apiKey, isSpeakerOn } = useSettings();
 
-  const processResponse = async (result, agentId, timestamp, conversations, setConversations) => {
-    // Update conversations first
-    setConversations(prev => ({
-      ...prev,
-      [agentId]: prev[agentId].map(conv => 
-        conv.timestamp === timestamp
-          ? {
-              ...conv,
-              aiResponse: result.response,
-              debug: result.debug
-            }
-          : conv
-      )
-    }));
-
-    // Then play TTS if enabled
-    if (isSpeakerOn) {
-      console.log('Speaker is on, playing audio');
-      onProcessingComplete(); // Signal processing complete before playing audio
-      const isPlaying = await playAudio(result.response);
-      if (!isPlaying) {
-        console.log('TTS failed or was not started');
-      }
-    } else {
-      onProcessingComplete(); // Signal processing complete if no audio
-    }
-  };
-
   const handleSubmit = async (input, agent, conversations, setConversations, tools = [], useSupabase = true) => {
     if (!isProcessing && input) {
       if (!apiKey) {
@@ -43,13 +15,14 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
         return;
       }
 
-      const timestamp = Date.now();
-      
       if (!agent) {
         toast.error('No agent selected');
         return;
       }
+
+      const timestamp = Date.now();
       
+      // Add user message immediately
       setConversations(prev => ({
         ...prev,
         [agent.id]: [
@@ -58,14 +31,13 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
             userInput: input,
             timestamp,
             agentId: agent.id,
-            agentName: agent.name,
-            agent: agent
+            agentName: agent.name
           }
         ]
       }));
 
       setIsProcessing(true);
-      onProcessingStart();
+      onProcessingStart?.();
       
       try {
         const enabledTools = tools.filter(tool => 
@@ -84,12 +56,32 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
         );
 
         if (result) {
-          await processResponse(result, agent.id, timestamp, conversations, setConversations);
+          // Update conversation with AI response
+          setConversations(prev => ({
+            ...prev,
+            [agent.id]: prev[agent.id].map(conv => 
+              conv.timestamp === timestamp
+                ? {
+                    ...conv,
+                    aiResponse: result.response,
+                    debug: result.debug
+                  }
+                : conv
+            )
+          }));
+
+          // Handle audio playback
+          if (isSpeakerOn) {
+            onProcessingComplete?.();
+            await playAudio(result.response);
+          } else {
+            onProcessingComplete?.();
+          }
         }
       } catch (error) {
         console.error('Error processing input:', error);
         toast.error(error.message || 'Failed to process input');
-        onProcessingComplete(); // Signal processing complete on error
+        onProcessingComplete?.();
       } finally {
         setIsProcessing(false);
         setStreamingResponse('');
