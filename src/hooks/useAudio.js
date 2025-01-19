@@ -28,7 +28,7 @@ export function useAudio({ onPlaybackComplete }) {
     };
   }, []);
 
-  const playAudio = async (text) => {
+  const playAudio = async (text, audioUrl) => {
     if (isIosDevice) {
       console.log('TTS disabled on iOS devices');
       onPlaybackComplete?.();
@@ -41,26 +41,58 @@ export function useAudio({ onPlaybackComplete }) {
       return false;
     }
 
-    console.log('Starting TTS with text:', text);
+    console.log('Starting audio playback');
     
-    if (!botnoiToken) {
-      console.error('Missing Botnoi token');
-      toast.error('Please enter your Botnoi Voice token in settings');
-      onPlaybackComplete?.();
-      return false;
-    }
-
-    if (!text?.trim()) {
-      console.error('Empty text provided to TTS');
-      toast.error('No text to convert to speech');
-      onPlaybackComplete?.();
-      return false;
-    }
-
     try {
       // Cleanup previous audio
       if (audioRef.current) {
         audioRef.current.pause();
+      }
+
+      // If we have a pre-generated audio URL, use it
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+
+        // Add error handling for audio loading
+        audio.onerror = (e) => {
+          console.error('Audio loading error:', e);
+          toast.error('Failed to load audio file');
+          onPlaybackComplete?.();
+        };
+
+        // Add event listeners before playing
+        const handleEnded = () => {
+          console.log('Audio playback completed');
+          onPlaybackComplete?.();
+        };
+
+        const handleError = (e) => {
+          console.error('Audio playback error:', e);
+          toast.error('Audio playback failed');
+          onPlaybackComplete?.();
+        };
+
+        audio.addEventListener('ended', handleEnded, { once: true });
+        audio.addEventListener('error', handleError, { once: true });
+
+        // Start playback
+        await audio.play();
+        return true;
+      }
+
+      // If no pre-generated audio URL and we have a token, generate audio
+      if (!botnoiToken) {
+        console.error('No audio URL or Botnoi token available');
+        onPlaybackComplete?.();
+        return false;
+      }
+
+      if (!text?.trim()) {
+        console.error('Empty text provided to TTS');
+        toast.error('No text to convert to speech');
+        onPlaybackComplete?.();
+        return false;
       }
 
       const response = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
@@ -121,8 +153,8 @@ export function useAudio({ onPlaybackComplete }) {
       return true;
 
     } catch (error) {
-      console.error('TTS Error:', error.message || error);
-      let errorMessage = 'Failed to generate speech';
+      console.error('Audio Error:', error.message || error);
+      let errorMessage = 'Failed to play audio';
       
       if (error.message?.includes('401')) {
         errorMessage = 'Invalid Botnoi Voice token';

@@ -1,42 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Default to empty strings if environment variables are not available
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Supabase configuration
+const supabaseUrl = 'https://bkajnqaikyduvqkpbhzo.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrYWpucWFpa3lkdXZxa3BiaHpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcwNDEwNzEsImV4cCI6MjA1MjYxNzA3MX0.oWTm9dsu3p3QoZUNLfbHurqXVGtIQSidvFTCzDNqyvc';
 
-// Create a mock client if credentials are missing
-const createMockClient = () => ({
+// Create Supabase client
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    getUser: () => Promise.resolve({ data: { user: null } }),
-    getSession: () => Promise.resolve({ data: { session: null } }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    signInWithPassword: () => Promise.resolve({ error: new Error('Supabase not configured') }),
-    signUp: () => Promise.resolve({ error: new Error('Supabase not configured') }),
-    signOut: () => Promise.resolve({ error: null })
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   },
-  from: () => ({
-    select: () => Promise.resolve({ data: [], error: null }),
-    insert: () => Promise.resolve({ error: new Error('Supabase not configured') }),
-    update: () => Promise.resolve({ error: new Error('Supabase not configured') }),
-    delete: () => Promise.resolve({ error: new Error('Supabase not configured') })
-  })
+  global: {
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
 });
 
-// Create the appropriate client based on environment variables
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      },
-      global: {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    })
-  : createMockClient();
-
-// Add a helper function to check if Supabase is properly configured
+// Helper function to check if Supabase is properly configured
 export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseAnonKey);

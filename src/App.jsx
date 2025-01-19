@@ -1,6 +1,9 @@
 import React from 'react';
 import { Toaster } from 'react-hot-toast';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
+import SharedAgentView from './components/shared/SharedAgentView';
+import TestProxyApi from './components/shared/TestProxyApi';
 import { AuthProvider } from './contexts/AuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { SettingsProvider } from './contexts/SettingsContext';
@@ -15,36 +18,57 @@ function App() {
     selectedAgentId,
     setSelectedAgentId,
     handleSaveAgent,
-    handleDeleteAgent
+    handleDeleteAgent,
+    isLoading: isLoadingAgents
   } = useAgents();
 
   const {
     tools,
-    handleSaveTool
+    handleSaveTool,
+    handleDeleteTool,
+    isLoading: isLoadingTools
   } = useTools();
 
+  const isLoading = isLoadingAgents || isLoadingTools;
+
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <ChatProvider>
-          <ModalProvider>
-            <MainLayout
-              agents={agents}
-              selectedAgentId={selectedAgentId}
-              setSelectedAgentId={setSelectedAgentId}
-              handleDeleteAgent={handleDeleteAgent}
-              tools={tools}
-            />
-            <ModalContainer
-              tools={tools}
-              onSaveAgent={handleSaveAgent}
-              onSaveTool={handleSaveTool}
-            />
-            <Toaster position="top-right" />
-          </ModalProvider>
-        </ChatProvider>
-      </SettingsProvider>
-    </AuthProvider>
+    <HashRouter>
+      <AuthProvider>
+        <SettingsProvider>
+          <ChatProvider>
+            <ModalProvider>
+              <Routes>
+                <Route path="/shared/:shareId" element={
+                  <SharedAgentView tools={tools} />
+                } />
+                <Route path="/test/:shareId" element={
+                  <TestProxyApi />
+                } />
+                <Route path="/" element={
+                  <MainLayout
+                    agents={agents}
+                    selectedAgentId={selectedAgentId}
+                    setSelectedAgentId={setSelectedAgentId}
+                    handleDeleteAgent={handleDeleteAgent}
+                    tools={tools}
+                    onAddTool={() => {}}
+                    onEditTool={() => {}}
+                    handleDeleteTool={handleDeleteTool}
+                    isLoading={isLoading}
+                  />
+                } />
+              </Routes>
+              <ModalContainer
+                tools={tools}
+                onSaveAgent={handleSaveAgent}
+                onSaveTool={handleSaveTool}
+              />
+              <Toaster position="top-right" />
+            </ModalProvider>
+          </ChatProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </HashRouter>
   );
 }
 

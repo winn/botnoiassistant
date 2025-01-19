@@ -60,7 +60,7 @@ export async function executeToolFunction(tool, parameters) {
 
     if (tool.method === 'POST') {
       requestConfig.headers['Content-Type'] = 'application/json';
-      const bodyTemplate = JSON.parse(tool.body || '{}');
+      const bodyTemplate = JSON.parse(tool.body_template || '{}');
       const processedBody = JSON.stringify(bodyTemplate).replace(
         /{{\s*([^}]+)\s*}}/g,
         (_, key) => JSON.stringify(parameters[key])
@@ -190,6 +190,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
     debug.initialResponse = initialResult;
 
     const message = initialResult.choices[0].message;
+    let fullResponse = '';
 
     // Handle function calling if needed
     if (message.function_call) {
@@ -247,11 +248,19 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
       throw error;
     }
 
-    let fullResponse = '';
     for await (const chunk of streamResponse(streamingResponse)) {
       fullResponse += chunk;
       onStream?.(chunk);
     }
+
+    debug.finalResponse = {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: fullResponse
+        }
+      }]
+    };
 
     return {
       response: fullResponse,

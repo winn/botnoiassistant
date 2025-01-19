@@ -9,7 +9,11 @@ export default function Sidebar({
   selectedAgentId,
   onDeleteAgent,
   onSelectAgent,
+  onShareAgent,
   tools,
+  onAddTool,
+  onEditTool,
+  onDeleteTool,
   onClose
 }) {
   const { openAgentModal, openToolModal } = useModal();
@@ -38,6 +42,7 @@ export default function Sidebar({
             onEditAgent={(agent) => openAgentModal(agent)}
             onDeleteAgent={onDeleteAgent}
             onSelectAgent={onSelectAgent}
+            onShareAgent={onShareAgent}
           />
         </div>
       </div>
@@ -49,6 +54,7 @@ export default function Sidebar({
             tools={tools}
             onAddTool={() => openToolModal()}
             onEditTool={(tool) => openToolModal(tool)}
+            onDeleteTool={onDeleteTool}
           />
         </div>
       </div>

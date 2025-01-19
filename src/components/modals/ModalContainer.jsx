@@ -3,6 +3,7 @@ import AgentModal from '../agents/AgentModal';
 import ToolModal from '../tools/ToolModal';
 import AuthModal from '../auth/AuthModal';
 import ClearHistoryModal from './ClearHistoryModal';
+import ShareAgentModal from './ShareAgentModal';
 import { useModal } from '../../contexts/ModalContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useChat } from '../../contexts/ChatContext';
@@ -13,7 +14,8 @@ export default function ModalContainer({ tools, onSaveAgent, onSaveTool }) {
     closeAgentModal, 
     closeToolModal,
     closeAuthModal,
-    closeClearHistoryModal
+    closeClearHistoryModal,
+    closeShareAgentModal
   } = useModal();
 
   const { setUser, setUserProfile } = useAuth();
@@ -63,6 +65,13 @@ export default function ModalContainer({ tools, onSaveAgent, onSaveTool }) {
           isOpen={true}
           onClose={closeClearHistoryModal}
           onConfirm={handleClearHistory}
+        />
+      )}
+      {modalState.shareAgentModal.isOpen && (
+        <ShareAgentModal
+          isOpen={true}
+          onClose={closeShareAgentModal}
+          agent={modalState.shareAgentModal.data}
         />
       )}
     </>

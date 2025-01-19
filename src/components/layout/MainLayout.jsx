@@ -6,15 +6,22 @@ import ChatContainer from '../chat/ChatContainer';
 import { useChat } from '../../hooks/useChat';
 import { useAudio } from '../../hooks/useAudio';
 import { useVoiceState } from '../../hooks/useVoiceState';
+import { useModal } from '../../contexts/ModalContext';
+import LoadingSpinner from '../shared/LoadingSpinner';
 
 export default function MainLayout({
   agents,
   selectedAgentId,
   setSelectedAgentId,
   handleDeleteAgent,
-  tools
+  tools,
+  onAddTool,
+  onEditTool,
+  handleDeleteTool,
+  isLoading
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { openShareAgentModal } = useModal();
   
   const voiceState = useVoiceState();
   
@@ -42,6 +49,17 @@ export default function MainLayout({
 
   const currentAgent = agents.find(a => a.id === selectedAgentId);
 
+  if (isLoading) {
+    return (
+      <div className="h-[100dvh] flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <LoadingSpinner size="lg" className="mb-4" />
+          <p className="text-gray-600">Loading your agents...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[100dvh] flex bg-gray-50 overflow-hidden">
       {/* Mobile Sidebar */}
@@ -59,7 +77,11 @@ export default function MainLayout({
               selectedAgentId={selectedAgentId}
               onDeleteAgent={handleDeleteAgent}
               onSelectAgent={setSelectedAgentId}
+              onShareAgent={openShareAgentModal}
               tools={tools}
+              onAddTool={onAddTool}
+              onEditTool={onEditTool}
+              onDeleteTool={handleDeleteTool}
               onClose={() => setIsSidebarOpen(false)}
             />
           </motion.div>
@@ -74,7 +96,11 @@ export default function MainLayout({
             selectedAgentId={selectedAgentId}
             onDeleteAgent={handleDeleteAgent}
             onSelectAgent={setSelectedAgentId}
+            onShareAgent={openShareAgentModal}
             tools={tools}
+            onAddTool={onAddTool}
+            onEditTool={onEditTool}
+            onDeleteTool={handleDeleteTool}
           />
         </div>
       </div>

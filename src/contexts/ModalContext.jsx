@@ -7,7 +7,8 @@ export function ModalProvider({ children }) {
     agentModal: { isOpen: false, data: null },
     toolModal: { isOpen: false, data: null },
     authModal: { isOpen: false },
-    clearHistoryModal: { isOpen: false, agentId: null }
+    clearHistoryModal: { isOpen: false, agentId: null },
+    shareAgentModal: { isOpen: false, data: null }
   });
 
   const openAgentModal = (agent = null) => {
@@ -66,6 +67,20 @@ export function ModalProvider({ children }) {
     }));
   };
 
+  const openShareAgentModal = (agent) => {
+    setModalState(prev => ({
+      ...prev,
+      shareAgentModal: { isOpen: true, data: agent }
+    }));
+  };
+
+  const closeShareAgentModal = () => {
+    setModalState(prev => ({
+      ...prev,
+      shareAgentModal: { isOpen: false, data: null }
+    }));
+  };
+
   const value = {
     modalState,
     openAgentModal,
@@ -75,7 +90,9 @@ export function ModalProvider({ children }) {
     openAuthModal,
     closeAuthModal,
     openClearHistoryModal,
-    closeClearHistoryModal
+    closeClearHistoryModal,
+    openShareAgentModal,
+    closeShareAgentModal
   };
 
   return (
