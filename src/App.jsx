@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
 import SharedAgentView from './components/shared/SharedAgentView';
-import TestProxyApi from './components/shared/TestProxyApi';
+import TestSharedView from './components/shared/TestSharedView';
 import { AuthProvider } from './contexts/AuthContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { SettingsProvider } from './contexts/SettingsContext';
@@ -44,7 +44,7 @@ function App() {
                     <SharedAgentView tools={tools} />
                   } />
                   <Route path="/test/:shareId" element={
-                    <TestProxyApi />
+                    <TestSharedView tools={tools} />
                   } />
                   <Route path="/" element={
                     <MainLayout

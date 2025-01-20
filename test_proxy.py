@@ -5,25 +5,23 @@ from datetime import datetime
 
 # Configuration
 SUPABASE_URL = "https://bkajnqaikyduvqkpbhzo.supabase.co"
-SHARE_ID = "your-share-id-here"  # Replace with actual share ID
+AGENT_ID = "your-agent-id-here"  # Replace with actual agent ID
 ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrYWpucWFpa3lkdXZxa3BiaHpvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcwNDEwNzEsImV4cCI6MjA1MjYxNzA3MX0.oWTm9dsu3p3QoZUNLfbHurqXVGtIQSidvFTCzDNqyvc"
 
 def test_proxy():
     # Edge function endpoint
     function_url = f"{SUPABASE_URL}/functions/v1/proxy"
 
-    # Create a test payload
+    # Test 1: Create new session
+    print("\n=== Test 1: Create New Session ===")
     payload = {
-        "sessionId": str(uuid.uuid4()),  # Generate a random session ID
-        "shareId": SHARE_ID,
-        "message": "สวัสดีค่ะ"  # Test message in Thai
+        "agentId": AGENT_ID,
+        "timestamp": int(datetime.now().timestamp() * 1000)
     }
-
-    print(f"\n=== Testing Proxy Function ===")
-    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
     print(f"URL: {function_url}")
     print("\nPayload:")
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(json.dumps(payload, indent=2))
 
     try:
         # Make the request
@@ -43,21 +41,35 @@ def test_proxy():
         for key, value in response.headers.items():
             print(f"  {key}: {value}")
 
-        # Parse and print response body
         try:
             response_data = response.json()
             print("\nResponse Body:")
-            print(json.dumps(response_data, indent=2, ensure_ascii=False))
+            print(json.dumps(response_data, indent=2))
 
-            # Additional debug info if available
-            if response_data.get('debug'):
-                print("\nDebug Information:")
-                print("Environment Variables:")
-                for key, value in response_data['debug'].get('env', {}).items():
-                    print(f"  {key}: {value}")
+            if response_data.get('success') and response_data.get('sessionId'):
+                # Test 2: Update session with message
+                print("\n=== Test 2: Update Session ===")
+                update_payload = {
+                    "agentId": AGENT_ID,
+                    "sessionId": response_data['sessionId'],
+                    "message": "Hello, this is a test message"
+                }
                 
-                print("\nSQL Queries:")
-                print(response_data['debug'].get('sql_query', 'No SQL query available'))
+                print("\nPayload:")
+                print(json.dumps(update_payload, indent=2))
+
+                update_response = requests.post(
+                    function_url,
+                    json=update_payload,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'Authorization': f'Bearer {ANON_KEY}'
+                    }
+                )
+
+                print(f"\nResponse Status: {update_response.status_code}")
+                print("\nResponse Body:")
+                print(json.dumps(update_response.json(), indent=2))
 
         except json.JSONDecodeError:
             print("\nNon-JSON Response:")
@@ -69,7 +81,7 @@ def test_proxy():
         print(f"\nUnexpected Error: {str(e)}")
 
 if __name__ == "__main__":
-    if SHARE_ID == "your-share-id-here":
-        print("Please replace 'your-share-id-here' with an actual share ID")
+    if AGENT_ID == "your-agent-id-here":
+        print("Please replace 'your-agent-id-here' with an actual agent ID")
     else:
         test_proxy()

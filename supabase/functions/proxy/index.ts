@@ -14,135 +14,112 @@ serve(async (req) => {
   }
 
   try {
-    // Validate request method
-    if (req.method !== 'POST') {
-      throw new Error('Method not allowed');
-    }
-
+    // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     )
 
     // Parse request body
-    const { sessionId, shareId, message } = await req.json()
+    const { agentId, timestamp, message, sessionId: existingSessionId } = await req.json()
 
-    if (!sessionId || !shareId || !message) {
-      throw new Error('Missing required parameters')
+    if (!agentId) {
+      throw new Error('Missing agent ID')
     }
 
-    console.log('Processing request:', { shareId, sessionId, messageLength: message.length })
-
-    // Get the public agent
+    // First verify the agent exists and is public
     const { data: agent, error: agentError } = await supabase
       .from('agents')
-      .select(`
-        id,
-        user_id,
-        name,
-        character,
-        actions,
-        enabled_tools,
-        faqs,
-        is_public
-      `)
-      .eq('id', shareId)
+      .select('id, session_quota')
+      .eq('id', agentId)
       .eq('is_public', true)
       .single()
 
-    if (agentError) {
-      console.error('Database error:', agentError)
-      throw new Error('Failed to load agent')
+    if (agentError || !agent) {
+      throw new Error('Agent not found or not public')
     }
 
-    if (!agent) {
-      throw new Error('Agent not found or is not public')
-    }
+    // If we have an existing session ID, update message count
+    if (existingSessionId && message) {
+      // First get current session
+      const { data: currentSession, error: sessionError } = await supabase
+        .from('shared_sessions')
+        .select('message_count, daily_usage')
+        .eq('session_id', existingSessionId)
+        .eq('agent_id', agentId)
+        .single()
 
-    // Get owner's credentials
-    const { data: credentials, error: credentialsError } = await supabase
-      .from('credentials')
-      .select('name, value')
-      .eq('user_id', agent.user_id)
+      if (sessionError) {
+        throw new Error('Failed to get session')
+      }
 
-    if (credentialsError) {
-      console.error('Credentials error:', credentialsError)
-      throw new Error('Failed to load credentials')
-    }
+      // Check if session quota is exceeded
+      if (currentSession.message_count >= agent.session_quota) {
+        throw new Error('Session quota exceeded')
+      }
 
-    // Extract API keys from credentials
-    const openaiKey = credentials?.find(c => c.name === 'openai')?.value
-    const botnoiToken = credentials?.find(c => c.name === 'botnoi')?.value
+      // Then update with incremented values
+      const { error: updateError } = await supabase
+        .from('shared_sessions')
+        .update({
+          message_count: (currentSession.message_count || 0) + 1,
+          daily_usage: (currentSession.daily_usage || 0) + 1,
+          last_message_at: new Date().toISOString()
+        })
+        .eq('session_id', existingSessionId)
+        .eq('agent_id', agentId)
 
-    if (!openaiKey || !botnoiToken) {
-      throw new Error('Agent owner has not configured required API credentials')
-    }
+      if (updateError) {
+        throw new Error('Failed to update session')
+      }
 
-    // Make request to OpenAI
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: `${agent.character}\n\n${agent.actions}`
-          },
-          {
-            role: 'user',
-            content: message
+      // Return success for message update
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Session updated'
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
           }
-        ]
-      })
-    })
-
-    if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.json().catch(() => null)
-      console.error('OpenAI API error:', errorData)
-      throw new Error(errorData?.error?.message || 'OpenAI API error')
+        }
+      )
     }
 
-    const openaiData = await openaiResponse.json()
-    const aiResponse = openaiData.choices[0].message.content
-
-    // Generate speech using Botnoi
-    const botnoiResponse = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
-      method: 'POST',
-      headers: {
-        'Botnoi-Token': botnoiToken,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        text: aiResponse,
-        speaker: "1",
-        volume: 1,
-        speed: 1,
-        type_media: "mp3",
-        save_file: true,
-        language: "th"
-      })
-    })
-
-    if (!botnoiResponse.ok) {
-      const errorData = await botnoiResponse.json().catch(() => null)
-      console.error('Botnoi API error:', errorData)
-      throw new Error(errorData?.error?.message || 'Botnoi API error')
+    // For new sessions, verify timestamp and create session
+    if (!timestamp) {
+      throw new Error('Missing timestamp for new session')
     }
 
-    const botnoiData = await botnoiResponse.json()
+    // Create session ID from agent ID and timestamp
+    const sessionId = `${agentId}_${timestamp}`
 
-    // Return success response
+    // Create new session with agent's quota
+    const { data: session, error: sessionError } = await supabase
+      .from('shared_sessions')
+      .insert({
+        agent_id: agentId,
+        session_id: sessionId,
+        message_count: 0,
+        daily_usage: 0,
+        session_quota: agent.session_quota,
+        last_message_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (sessionError) {
+      throw sessionError
+    }
+
+    // Return success with session info
     return new Response(
       JSON.stringify({
         success: true,
-        response: aiResponse,
-        audio_url: botnoiData.audio_url
+        sessionId,
+        session
       }),
       {
         headers: {
@@ -151,15 +128,17 @@ serve(async (req) => {
         }
       }
     )
+
   } catch (error) {
-    console.error('Proxy error:', error)
+    console.error('Error:', error)
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'An unknown error occurred'
+        error: error.message
       }),
       {
-        status: error.status || 400,
+        status: 400,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json'
