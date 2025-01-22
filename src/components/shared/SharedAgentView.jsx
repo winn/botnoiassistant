@@ -14,6 +14,8 @@ export default function SharedAgentView({ tools }) {
   const [agent, setAgent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [conversations, setConversations] = useState({});
+  const [sessionId, setSessionId] = useState(null);
   const voiceState = useVoiceState();
   
   const { playAudio } = useAudio({
@@ -38,30 +40,34 @@ export default function SharedAgentView({ tools }) {
     }
   });
 
-  const handleSubmit = async (input, agent, conversations, setConversations) => {
+  const handleSubmit = async (input, agent) => {
     if (!input || !agent) return;
 
-    const sessionId = crypto.randomUUID();
+    if (!sessionId) {
+      toast.error('Session not initialized');
+      return;
+    }
     
     try {
       const timestamp = Date.now();
+      
+      // Update local state immediately
+      const newMessage = {
+        userInput: input,
+        timestamp,
+        agentId: agent.id,
+        agentName: agent.name,
+        debug: {
+          timestamp: new Date().toISOString(),
+          sessionId,
+          agentId: agent.id,
+          input
+        }
+      };
+
       setConversations(prev => ({
         ...prev,
-        [agent.id]: [
-          ...(prev[agent.id] || []),
-          {
-            userInput: input,
-            timestamp,
-            agentId: agent.id,
-            agentName: agent.name,
-            debug: {
-              timestamp: new Date().toISOString(),
-              sessionId,
-              shareId: agent.id,
-              input
-            }
-          }
-        ]
+        [agent.id]: [...(prev[agent.id] || []), newMessage]
       }));
 
       voiceState.startProcessing();
@@ -73,8 +79,8 @@ export default function SharedAgentView({ tools }) {
           'Authorization': `Bearer ${supabase.supabaseKey}`
         },
         body: JSON.stringify({
+          agentId: agent.id,
           sessionId,
-          shareId: agent.id,
           message: input
         })
       });
@@ -89,13 +95,14 @@ export default function SharedAgentView({ tools }) {
       const debug = {
         timestamp: new Date().toISOString(),
         sessionId,
-        shareId: agent.id,
+        agentId: agent.id,
         input,
         response: responseData,
         status: response.status,
         headers: Object.fromEntries(response.headers.entries())
       };
 
+      // Update conversation with AI response
       setConversations(prev => ({
         ...prev,
         [agent.id]: prev[agent.id].map(conv => 
@@ -124,7 +131,7 @@ export default function SharedAgentView({ tools }) {
       const debug = {
         timestamp: new Date().toISOString(),
         sessionId,
-        shareId: agent.id,
+        agentId: agent.id,
         input,
         error: {
           message: error.message,
@@ -147,6 +154,35 @@ export default function SharedAgentView({ tools }) {
 
       toast.error(error.message || 'Failed to process request');
       voiceState.finishSpeaking();
+    }
+  };
+
+  const initializeSession = async (agentId) => {
+    try {
+      const timestamp = Date.now();
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabase.supabaseKey}`
+        },
+        body: JSON.stringify({
+          agentId,
+          timestamp
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initialize session');
+      }
+
+      setSessionId(data.sessionId);
+      return data.sessionId;
+    } catch (error) {
+      console.error('Failed to initialize session:', error);
+      toast.error('Failed to initialize session');
+      return null;
     }
   };
 
@@ -194,6 +230,11 @@ export default function SharedAgentView({ tools }) {
       }
 
       setAgent(publicAgent);
+      setConversations({ [publicAgent.id]: [] });
+      
+      // Initialize session
+      await initializeSession(publicAgent.id);
+
     } catch (error) {
       console.error('Error loading shared agent:', error);
       setError(error.message || 'Failed to load shared agent');
@@ -249,6 +290,8 @@ export default function SharedAgentView({ tools }) {
             voiceState={voiceState}
             streamingResponse={streamingResponse}
             onSubmit={handleSubmit}
+            conversations={conversations}
+            setConversations={setConversations}
           />
         </div>
       </div>

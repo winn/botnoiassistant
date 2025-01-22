@@ -8,14 +8,20 @@ export default function ChatContainer({
   tools,
   voiceState,
   streamingResponse,
-  onSubmit
+  onSubmit,
+  conversations, // Add this prop
+  setConversations // Add this prop
 }) {
   const chatEndRef = useRef(null);
-  const { conversations, setConversations } = useChat();
+  const { conversations: contextConversations, setConversations: setContextConversations } = useChat();
+
+  // Use either provided conversations or context conversations
+  const currentConversations = conversations || contextConversations;
+  const currentSetConversations = setConversations || setContextConversations;
 
   const handleSubmit = (input) => {
     if (!input.trim() || !onSubmit) return;
-    onSubmit(input, agent, conversations, setConversations, tools);
+    onSubmit(input, agent, currentConversations, currentSetConversations, tools);
   };
 
   return (
@@ -23,7 +29,7 @@ export default function ChatContainer({
       {/* Chat History */}
       <div className="flex-1 overflow-y-auto bg-white/60 backdrop-blur-sm">
         <ChatHistory
-          conversations={conversations}
+          conversations={currentConversations}
           agentId={agent?.id}
           isProcessing={voiceState?.isProcessing}
           streamingText={streamingResponse}
