@@ -2,30 +2,41 @@ import { toast } from 'react-hot-toast';
 
 export function convertToolToFunction(tool) {
   try {
+    // Parse input schema
     let inputSchema;
     try {
-      inputSchema = typeof tool.input.schema === 'string' 
-        ? JSON.parse(tool.input.schema)
-        : tool.input.schema;
+      inputSchema = typeof tool.input === 'string' 
+        ? JSON.parse(tool.input)
+        : tool.input;
     } catch (e) {
       console.error('Invalid input schema:', e);
       toast.error('Invalid input schema format');
       return null;
     }
 
-    if (!inputSchema.properties || typeof inputSchema.properties !== 'object') {
+    // Ensure schema has properties
+    if (!inputSchema.schema || typeof inputSchema.schema !== 'object') {
       inputSchema = {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description: tool.input.description || 'Input query'
+            description: inputSchema.description || 'Input query'
           }
         },
         required: ['query']
       };
+    } else {
+      try {
+        inputSchema = JSON.parse(inputSchema.schema);
+      } catch (e) {
+        console.error('Invalid input schema JSON:', e);
+        toast.error('Invalid input schema JSON format');
+        return null;
+      }
     }
 
+    // Create sanitized function name
     const sanitizedName = tool.name
       .toLowerCase()
       .replace(/[^a-z0-9_-]/g, '_')
@@ -34,11 +45,7 @@ export function convertToolToFunction(tool) {
     return {
       name: sanitizedName,
       description: `${tool.description}\n\nInput: ${tool.input.description}\nOutput: ${tool.output.description}`,
-      parameters: {
-        type: 'object',
-        properties: inputSchema.properties,
-        required: inputSchema.required || Object.keys(inputSchema.properties)
-      }
+      parameters: inputSchema
     };
   } catch (error) {
     console.error('Error converting tool to function:', error);
@@ -49,7 +56,10 @@ export function convertToolToFunction(tool) {
 
 export async function executeToolFunction(tool, parameters) {
   try {
-    const headers = JSON.parse(tool.headers || '{}');
+    const headers = typeof tool.headers === 'string' 
+      ? JSON.parse(tool.headers) 
+      : tool.headers || {};
+
     const requestConfig = {
       method: tool.method,
       headers: {
@@ -60,7 +70,10 @@ export async function executeToolFunction(tool, parameters) {
 
     if (tool.method === 'POST') {
       requestConfig.headers['Content-Type'] = 'application/json';
-      const bodyTemplate = JSON.parse(tool.body_template || '{}');
+      const bodyTemplate = typeof tool.body === 'string'
+        ? JSON.parse(tool.body)
+        : tool.body || {};
+
       const processedBody = JSON.stringify(bodyTemplate).replace(
         /{{\s*([^}]+)\s*}}/g,
         (_, key) => JSON.stringify(parameters[key])
@@ -155,7 +168,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
     // First request to check for function calls
     const initialRequest = {
-      model: 'gpt-4o-mini',
+      model: 'gpt-4',
       messages: validMessages,
       temperature: 0.7,
       stream: false,
@@ -221,7 +234,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
     // Make final streaming request
     const finalRequest = {
-      model: 'gpt-4o-mini',
+      model: 'gpt-4',
       messages: validMessages,
       temperature: 0.7,
       stream: true
