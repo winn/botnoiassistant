@@ -17,7 +17,7 @@ const isIOS = () => {
 
 export function useAudio({ onPlaybackComplete }) {
   const audioRef = useRef(null);
-  const { botnoiToken, isSpeakerOn } = useSettings();
+  const { botnoiToken, textToSpeechEnabled } = useSettings();
   const isIosDevice = isIOS();
 
   useEffect(() => {
@@ -29,14 +29,15 @@ export function useAudio({ onPlaybackComplete }) {
   }, []);
 
   const playAudio = async (text, audioUrl) => {
-    if (isIosDevice) {
-      console.log('TTS disabled on iOS devices');
+    // Don't proceed if text-to-speech is disabled
+    if (!textToSpeechEnabled) {
+      console.log('Text-to-speech is disabled, skipping audio playback');
       onPlaybackComplete?.();
       return false;
     }
 
-    if (!isSpeakerOn) {
-      console.log('Speaker is off, skipping TTS');
+    if (isIosDevice) {
+      console.log('TTS disabled on iOS devices');
       onPlaybackComplete?.();
       return false;
     }

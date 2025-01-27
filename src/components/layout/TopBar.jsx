@@ -8,7 +8,7 @@ import UserMenu from '../auth/UserMenu';
 import TopMenu from './TopMenu';
 
 export default function TopBar({ onOpenSidebar, currentAgent }) {
-  const { isSpeakerOn, setIsSpeakerOn } = useSettings();
+  const { textToSpeechEnabled } = useSettings();
   const { user, userProfile } = useAuth();
   const { clearHistory } = useChat();
   const { openClearHistoryModal } = useModal();
@@ -20,15 +20,16 @@ export default function TopBar({ onOpenSidebar, currentAgent }) {
   };
 
   return (
-    <div className="flex items-center justify-between p-2 md:p-4 bg-white/80 backdrop-blur border-b border-white/20">
+    <div className="flex items-center justify-between p-2 md:p-4 bg-[#ffffff] shadow-sm border-b border-[#262626]/10">
       <div className="flex items-center space-x-4">
         <button
           onClick={onOpenSidebar}
-          className="p-2 rounded-lg hover:bg-sky-100 text-sky-500 md:hidden"
+          className="p-2 rounded-lg hover:bg-[#01BFFB]/10 text-[#01BFFB] md:hidden transition-colors"
+          aria-label="Open menu"
         >
           <Bars3Icon className="h-6 w-6" />
         </button>
-        <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent truncate">
+        <h1 className="text-lg md:text-xl font-bold text-[#262626] truncate">
           {currentAgent?.name || 'Voice Assistant'}
         </h1>
       </div>
@@ -36,20 +37,12 @@ export default function TopBar({ onOpenSidebar, currentAgent }) {
         {currentAgent && (
           <button
             onClick={handleClearHistory}
-            className="p-2 rounded-lg hover:bg-red-100 text-red-500 transition-colors"
+            className="p-2 rounded-lg hover:bg-[#01BFFB]/10 text-[#01BFFB] transition-colors"
             title="Clear chat history"
           >
             <TrashIcon className="h-5 w-5" />
           </button>
         )}
-        <button
-          onClick={() => setIsSpeakerOn(!isSpeakerOn)}
-          className={`p-2 rounded-lg transition-colors ${
-            isSpeakerOn ? 'bg-sky-100 text-sky-500' : 'text-gray-400 hover:bg-gray-100'
-          }`}
-        >
-          {isSpeakerOn ? '🔊' : '🔇'}
-        </button>
         <UserMenu 
           user={user}
           profile={userProfile}

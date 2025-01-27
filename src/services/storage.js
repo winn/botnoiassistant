@@ -102,7 +102,10 @@ export async function loadUserProfile() {
 export async function loadAgents() {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user) {
+      // Return agents from local storage if not logged in
+      return getLocalStorage('agents', []);
+    }
 
     const { data, error } = await supabase
       .from('agents')
@@ -113,7 +116,7 @@ export async function loadAgents() {
     return data;
   } catch (error) {
     console.error('Failed to load agents:', error);
-    return null;
+    return getLocalStorage('agents', []);
   }
 }
 
@@ -122,8 +125,21 @@ export async function saveAgent(agentData) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast.error('You must be logged in to save agents');
-      return null;
+      // Save to local storage if not logged in
+      const agents = getLocalStorage('agents', []);
+      const newAgent = {
+        ...agentData,
+        id: agentData.id || crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const updatedAgents = agentData.id 
+        ? agents.map(a => a.id === agentData.id ? newAgent : a)
+        : [...agents, newAgent];
+
+      setLocalStorage('agents', updatedAgents);
+      return newAgent;
     }
 
     const { data, error } = await supabase
@@ -147,7 +163,10 @@ export async function saveAgent(agentData) {
 export async function loadTools() {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user) {
+      // Return tools from local storage if not logged in
+      return getLocalStorage('tools', []);
+    }
 
     const { data, error } = await supabase
       .from('tools')
@@ -158,7 +177,7 @@ export async function loadTools() {
     return data;
   } catch (error) {
     console.error('Failed to load tools:', error);
-    return null;
+    return getLocalStorage('tools', []);
   }
 }
 
@@ -167,8 +186,21 @@ export async function saveTool(toolData) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast.error('You must be logged in to save tools');
-      return null;
+      // Save to local storage if not logged in
+      const tools = getLocalStorage('tools', []);
+      const newTool = {
+        ...toolData,
+        id: toolData.id || crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const updatedTools = toolData.id 
+        ? tools.map(t => t.id === toolData.id ? newTool : t)
+        : [...tools, newTool];
+
+      setLocalStorage('tools', updatedTools);
+      return newTool;
     }
 
     const { data, error } = await supabase
@@ -192,7 +224,11 @@ export async function saveTool(toolData) {
 export async function loadAgentConversations(agentId) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+    if (!user) {
+      // Return conversations from local storage if not logged in
+      const conversations = getLocalStorage(`conversations_${agentId}`, []);
+      return conversations;
+    }
 
     const { data, error } = await supabase
       .from('conversations')
@@ -213,7 +249,18 @@ export async function loadAgentConversations(agentId) {
 export async function saveConversation(agentId, conversation) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+    if (!user) {
+      // Save to local storage if not logged in
+      const conversations = getLocalStorage(`conversations_${agentId}`, []);
+      const newConversation = {
+        ...conversation,
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString()
+      };
+      conversations.push(newConversation);
+      setLocalStorage(`conversations_${agentId}`, conversations);
+      return true;
+    }
 
     const { error } = await supabase
       .from('conversations')
@@ -237,7 +284,11 @@ export async function saveConversation(agentId, conversation) {
 export async function clearConversations(agentId) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+    if (!user) {
+      // Clear from local storage if not logged in
+      setLocalStorage(`conversations_${agentId}`, []);
+      return true;
+    }
 
     const { error } = await supabase
       .from('conversations')

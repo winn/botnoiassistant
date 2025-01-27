@@ -6,12 +6,14 @@ import { loadAgentConversations, saveConversation, clearConversations } from './
 export async function processAIResponse(
   input, 
   apiKey, 
-  conversationHistory, 
-  botCharacter, 
-  botActions, 
-  tools = [], 
+  conversationHistory,
+  botCharacter,
+  botActions,
+  tools = [],
   onStream,
-  useSupabase = true
+  useSupabase = true,
+  faqs = [],
+  agentId = null
 ) {
   if (!apiKey) {
     toast.error('Please enter your OpenAI API key in settings');
@@ -23,13 +25,15 @@ export async function processAIResponse(
     return null;
   }
 
-  const agent = conversationHistory[0]?.agent || null;
-  const faqs = agent?.faqs || [];
-
   const faqSection = faqs.length > 0
-    ? `\nFrequently Asked Questions:\n${faqs.map(faq => 
-        `Q: ${faq.question}\nA: ${faq.answer}`
-      ).join('\n\n')}`
+    ? `\nKnowledge Base (HIGHEST PRIORITY):
+${faqs.map(faq => 
+  `Question: ${faq.question}
+Answer: ${faq.answer}`
+).join('\n\n')}\n\nIMPORTANT: When a user's question matches or is similar to any FAQ above:
+1. Use the FAQ answer as your primary source of information
+2. Give the exact answer to that FAQ question without any modification
+3. Prioritize FAQ knowledge over other responses, don't even try to modify the defined answer`
     : '';
 
   const toolsSection = tools.length > 0
@@ -51,10 +55,14 @@ Instructions for Tool Usage:
    - Use the function's response to provide a natural response
 2. If no function is needed, respond directly to the user's request
 3. If the user's question matches any FAQ:
-   - Use the provided answer as a reference
+   - Use the provided answer as your primary source of truth
    - Maintain your character while incorporating the FAQ knowledge
+   - Never contradict the FAQ answers
 4. Always maintain the character and behavior defined above
-5. Integrate knowledge from FAQs naturally into your responses${toolsSection}`;
+5. Prioritize knowledge in this order:
+   1. FAQ answers (highest priority)
+   2. Function/tool responses
+   3. General knowledge${toolsSection}`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -70,10 +78,14 @@ Instructions for Tool Usage:
     
     if (result) {
       const conversation = {
-        agentId: conversationHistory[0]?.agentId || 'default',
+        agentId: agentId || 'default',
         userInput: input,
         aiResponse: result.response,
-        debug: result.debug
+        debug: {
+          ...result.debug,
+          systemPrompt,
+          faqs: faqs.length > 0 ? faqs : undefined
+        }
       };
 
       if (useSupabase) {

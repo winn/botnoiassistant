@@ -25,21 +25,6 @@ export default function SharedAgentView({ tools }) {
     }
   });
 
-  const {
-    streamingResponse,
-    handleSubmit: originalHandleSubmit
-  } = useChat({
-    playAudio,
-    onProcessingStart: () => {
-      console.log('Processing started');
-      voiceState.startProcessing();
-    },
-    onProcessingComplete: () => {
-      console.log('Processing completed');
-      voiceState.startSpeaking();
-    }
-  });
-
   const handleSubmit = async (input, agent) => {
     if (!input || !agent) return;
 
@@ -49,25 +34,53 @@ export default function SharedAgentView({ tools }) {
     }
     
     try {
+      // Check session quota before making the request
+      const { data: currentSession, error: sessionError } = await supabase
+        .from('shared_sessions')
+        .select('message_count')
+        .eq('session_id', sessionId)
+        .single();
+
+      if (sessionError) throw sessionError;
+
+      if (currentSession.message_count >= agent.session_quota) {
+        toast((t) => (
+          <div className="flex flex-col">
+            <span className="font-semibold">Session Limit Reached</span>
+            <span className="text-sm">
+              Maximum {agent.session_quota} messages per session allowed.
+            </span>
+          </div>
+        ), {
+          duration: 5000,
+          style: {
+            background: '#FEE2E2',
+            color: '#991B1B',
+            border: '1px solid #F87171',
+            padding: '16px',
+            borderRadius: '8px',
+            minWidth: '300px'
+          },
+          icon: '🚫'
+        });
+        voiceState.finishSpeaking();
+        return;
+      }
+
       const timestamp = Date.now();
       
       // Update local state immediately
-      const newMessage = {
-        userInput: input,
-        timestamp,
-        agentId: agent.id,
-        agentName: agent.name,
-        debug: {
-          timestamp: new Date().toISOString(),
-          sessionId,
-          agentId: agent.id,
-          input
-        }
-      };
-
       setConversations(prev => ({
         ...prev,
-        [agent.id]: [...(prev[agent.id] || []), newMessage]
+        [agent.id]: [
+          ...(prev[agent.id] || []),
+          {
+            userInput: input,
+            timestamp,
+            agentId: agent.id,
+            agentName: agent.name
+          }
+        ]
       }));
 
       voiceState.startProcessing();
@@ -157,35 +170,6 @@ export default function SharedAgentView({ tools }) {
     }
   };
 
-  const initializeSession = async (agentId) => {
-    try {
-      const timestamp = Date.now();
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/proxy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabase.supabaseKey}`
-        },
-        body: JSON.stringify({
-          agentId,
-          timestamp
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to initialize session');
-      }
-
-      setSessionId(data.sessionId);
-      return data.sessionId;
-    } catch (error) {
-      console.error('Failed to initialize session:', error);
-      toast.error('Failed to initialize session');
-      return null;
-    }
-  };
-
   useEffect(() => {
     loadSharedAgent();
     
@@ -214,7 +198,8 @@ export default function SharedAgentView({ tools }) {
           actions,
           enabled_tools,
           faqs,
-          is_public
+          is_public,
+          session_quota
         `)
         .eq('id', shareId)
         .eq('is_public', true)
@@ -233,7 +218,25 @@ export default function SharedAgentView({ tools }) {
       setConversations({ [publicAgent.id]: [] });
       
       // Initialize session
-      await initializeSession(publicAgent.id);
+      const timestamp = Date.now();
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabase.supabaseKey}`
+        },
+        body: JSON.stringify({
+          agentId: publicAgent.id,
+          timestamp
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initialize session');
+      }
+
+      setSessionId(data.sessionId);
 
     } catch (error) {
       console.error('Error loading shared agent:', error);
@@ -245,10 +248,10 @@ export default function SharedAgentView({ tools }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#ffffff]">
         <div className="text-center">
-          <LoadingSpinner size="lg" className="mb-4" />
-          <p className="text-gray-600">Loading shared agent...</p>
+          <LoadingSpinner size="lg" className="text-[#01BFFB] mb-4" />
+          <p className="text-[#262626] font-medium">Loading shared agent...</p>
         </div>
       </div>
     );
@@ -256,13 +259,13 @@ export default function SharedAgentView({ tools }) {
 
   if (error || !agent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-[#ffffff]">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Agent Not Available</h1>
-          <p className="text-gray-600 mb-6">{error || 'This agent is not available or has been made private.'}</p>
+          <h1 className="text-2xl font-bold text-[#262626] mb-2">Agent Not Available</h1>
+          <p className="text-[#262626] mb-6">{error || 'This agent is not available or has been made private.'}</p>
           <button
             onClick={() => navigate('/')}
-            className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+            className="px-4 py-2 bg-[#01BFFB] text-[#ffffff] rounded-lg hover:opacity-90 transition-colors"
           >
             Return Home
           </button>
@@ -271,24 +274,30 @@ export default function SharedAgentView({ tools }) {
     );
   }
 
+  const messagesRemaining = Math.max(0, agent.session_quota - (conversations[agent.id]?.length || 0));
+
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b">
+      <div className="flex-shrink-0 bg-[#ffffff] border-b border-[#262626]/10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-2xl font-bold text-gray-800">{agent.name}</h1>
-          <p className="text-gray-600 mt-1">{agent.character}</p>
+          <h1 className="text-2xl font-bold text-[#262626]">{agent.name}</h1>
+          <p className="text-[#262626] mt-1">{agent.character}</p>
+          <div className="mt-2 text-sm">
+            <span className={`font-medium ${messagesRemaining < 3 ? 'text-red-600' : 'text-[#262626]/70'}`}>
+              Messages remaining: {messagesRemaining}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Chat Container */}
-      <div className="flex-1 min-h-0 bg-gray-50">
+      <div className="flex-1 min-h-0 bg-[#ffffff]">
         <div className="h-full max-w-4xl mx-auto">
           <ChatContainer
             agent={agent}
             tools={tools}
             voiceState={voiceState}
-            streamingResponse={streamingResponse}
             onSubmit={handleSubmit}
             conversations={conversations}
             setConversations={setConversations}

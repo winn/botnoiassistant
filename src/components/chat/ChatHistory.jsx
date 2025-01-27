@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid';
 
 export default function ChatHistory({ conversations = [], agentId, isProcessing, streamingText }) {
   const [expandedPayloads, setExpandedPayloads] = useState({});
   const agentConversations = conversations[agentId] || [];
+  const messagesEndRef = useRef(null);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [agentConversations, streamingText]);
 
   const togglePayload = (timestamp) => {
     setExpandedPayloads(prev => ({
@@ -108,6 +114,7 @@ export default function ChatHistory({ conversations = [], agentId, isProcessing,
           </motion.div>
         ))}
       </AnimatePresence>
+      <div ref={messagesEndRef} />
     </div>
   );
 }

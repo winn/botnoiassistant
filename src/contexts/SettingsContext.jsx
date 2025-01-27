@@ -8,8 +8,8 @@ const SettingsContext = createContext();
 export function SettingsProvider({ children }) {
   const [apiKey, setApiKey] = useState('');
   const [botnoiToken, setBotnoiToken] = useState('');
-  const [useSupabase, setUseSupabase] = useState(true);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [speechRecognitionEnabled, setSpeechRecognitionEnabled] = useState(true);
+  const [textToSpeechEnabled, setTextToSpeechEnabled] = useState(true);
   const { user } = useAuth();
 
   // Load credentials whenever user changes
@@ -51,10 +51,10 @@ export function SettingsProvider({ children }) {
     setApiKey: handleApiKeyChange,
     botnoiToken,
     setBotnoiToken: handleBotnoiTokenChange,
-    useSupabase,
-    setUseSupabase,
-    isSpeakerOn,
-    setIsSpeakerOn
+    speechRecognitionEnabled,
+    setSpeechRecognitionEnabled,
+    textToSpeechEnabled,
+    setTextToSpeechEnabled
   };
 
   return (

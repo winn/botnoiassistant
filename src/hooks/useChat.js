@@ -6,7 +6,7 @@ import { useSettings } from '../contexts/SettingsContext';
 export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamingResponse, setStreamingResponse] = useState('');
-  const { apiKey, isSpeakerOn } = useSettings();
+  const { apiKey, textToSpeechEnabled } = useSettings();
 
   const handleSubmit = async (input, agent, conversations, setConversations, tools = [], useSupabase = true) => {
     if (!isProcessing && input) {
@@ -52,7 +52,9 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
           agent.actions,
           enabledTools,
           (chunk) => setStreamingResponse(prev => prev + chunk),
-          useSupabase
+          useSupabase,
+          agent.faqs || [],
+          agent.id
         );
 
         if (result) {
@@ -70,11 +72,12 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
             )
           }));
 
-          // Handle audio playback
-          if (isSpeakerOn) {
+          // Handle audio playback only if text-to-speech is enabled
+          if (textToSpeechEnabled) {
             onProcessingComplete?.();
             await playAudio(result.response);
           } else {
+            // Just complete processing without audio
             onProcessingComplete?.();
           }
         }

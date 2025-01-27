@@ -11,7 +11,8 @@ export default function AgentForm({
   tools = [],
   onSubmit,
   onCancel,
-  isSubmitting = false
+  isSubmitting = false,
+  buttonText = 'Save'
 }) {
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -88,14 +89,16 @@ export default function AgentForm({
         <SecondaryButton
           type="button"
           onClick={onCancel}
+          className="min-w-[120px] h-12 px-8 text-base font-medium"
         >
           Cancel
         </SecondaryButton>
         <PrimaryButton
           type="submit"
           loading={isSubmitting}
+          className="min-w-[120px] h-12 px-8 text-base font-medium"
         >
-          {formData.id ? 'Update Agent' : 'Create Agent'}
+          {buttonText}
         </PrimaryButton>
       </div>
     </form>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Toaster } from 'react-hot-toast';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import MainLayout from './components/layout/MainLayout';
+import LandingPage from './components/landing/LandingPage';
 import SharedAgentView from './components/shared/SharedAgentView';
 import TestSharedView from './components/shared/TestSharedView';
 import { AuthProvider } from './contexts/AuthContext';
@@ -12,6 +13,12 @@ import { FeaturesProvider } from './contexts/FeaturesContext';
 import ModalContainer from './components/modals/ModalContainer';
 import { useAgents } from './hooks/useAgents';
 import { useTools } from './hooks/useTools';
+import { useAuth } from './contexts/AuthContext';
+
+function ProtectedRoute({ children }) {
+  const { user } = useAuth();
+  return user ? children : <LandingPage />;
+}
 
 function App() {
   const {
@@ -47,17 +54,19 @@ function App() {
                     <TestSharedView tools={tools} />
                   } />
                   <Route path="/" element={
-                    <MainLayout
-                      agents={agents}
-                      selectedAgentId={selectedAgentId}
-                      setSelectedAgentId={setSelectedAgentId}
-                      handleDeleteAgent={handleDeleteAgent}
-                      tools={tools}
-                      onAddTool={() => {}}
-                      onEditTool={() => {}}
-                      handleDeleteTool={handleDeleteTool}
-                      isLoading={isLoading}
-                    />
+                    <ProtectedRoute>
+                      <MainLayout
+                        agents={agents}
+                        selectedAgentId={selectedAgentId}
+                        setSelectedAgentId={setSelectedAgentId}
+                        handleDeleteAgent={handleDeleteAgent}
+                        tools={tools}
+                        onAddTool={() => {}}
+                        onEditTool={() => {}}
+                        handleDeleteTool={handleDeleteTool}
+                        isLoading={isLoading}
+                      />
+                    </ProtectedRoute>
                   } />
                 </Routes>
                 <ModalContainer

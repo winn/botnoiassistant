@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Cog6ToothIcon, CloudIcon } from '@heroicons/react/24/solid';
+import { Cog6ToothIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettings } from '../../contexts/SettingsContext';
+import { toast } from 'react-hot-toast';
 
 export default function TopMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,9 +12,25 @@ export default function TopMenu() {
     setApiKey,
     botnoiToken,
     setBotnoiToken,
-    useSupabase,
-    setUseSupabase
+    speechRecognitionEnabled,
+    setSpeechRecognitionEnabled,
+    textToSpeechEnabled,
+    setTextToSpeechEnabled
   } = useSettings();
+
+  // Local state for form values
+  const [formValues, setFormValues] = useState({
+    apiKey: apiKey,
+    botnoiToken: botnoiToken
+  });
+
+  // Update local state when props change
+  useEffect(() => {
+    setFormValues({
+      apiKey: apiKey,
+      botnoiToken: botnoiToken
+    });
+  }, [apiKey, botnoiToken]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -25,6 +42,16 @@ export default function TopMenu() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleSaveApiKey = () => {
+    setApiKey(formValues.apiKey);
+    toast.success('OpenAI API key saved successfully');
+  };
+
+  const handleSaveBotnoiToken = () => {
+    setBotnoiToken(formValues.botnoiToken);
+    toast.success('Botnoi token saved successfully');
+  };
 
   return (
     <div className="relative" ref={menuRef}>
@@ -45,52 +72,86 @@ export default function TopMenu() {
             className="absolute right-0 mt-2 w-80 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4 z-50"
           >
             <div className="space-y-4">
-              <div>
+              {/* Voice Features */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-700">Voice Features</h3>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Speech Recognition</span>
+                  <button
+                    onClick={() => setSpeechRecognitionEnabled(!speechRecognitionEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      speechRecognitionEnabled ? 'bg-sky-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className="sr-only">Enable speech recognition</span>
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        speechRecognitionEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Text to Speech</span>
+                  <button
+                    onClick={() => setTextToSpeechEnabled(!textToSpeechEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      textToSpeechEnabled ? 'bg-sky-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className="sr-only">Enable text to speech</span>
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        textToSpeechEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   OpenAI API Key
                 </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                  placeholder="Enter your OpenAI API key"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Botnoi Voice Token
-                </label>
-                <input
-                  type="password"
-                  value={botnoiToken}
-                  onChange={(e) => setBotnoiToken(e.target.value)}
-                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                  placeholder="Enter your Botnoi Voice token"
-                />
-              </div>
-              <div>
-                <label className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Store Conversations</span>
-                  <div 
-                    onClick={() => setUseSupabase(!useSupabase)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
-                      useSupabase ? 'bg-sky-500' : 'bg-gray-200'
-                    }`}
+                <div className="flex space-x-2">
+                  <input
+                    type="password"
+                    value={formValues.apiKey}
+                    onChange={(e) => setFormValues(prev => ({ ...prev, apiKey: e.target.value }))}
+                    className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                    placeholder="Enter your OpenAI API key"
+                  />
+                  <button
+                    onClick={handleSaveApiKey}
+                    className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
                   >
-                    <span className="sr-only">Store conversations in cloud</span>
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        useSupabase ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </div>
-                </label>
-                <div className="mt-1 flex items-center text-sm text-gray-500">
-                  <CloudIcon className="h-4 w-4 mr-1" />
-                  {useSupabase ? 'Storing conversations in cloud' : 'Keeping conversations in browser only'}
+                    Save
+                  </button>
                 </div>
               </div>
+
+              {textToSpeechEnabled && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Botnoi Voice Token
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="password"
+                      value={formValues.botnoiToken}
+                      onChange={(e) => setFormValues(prev => ({ ...prev, botnoiToken: e.target.value }))}
+                      className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                      placeholder="Enter your Botnoi Voice token"
+                    />
+                    <button
+                      onClick={handleSaveBotnoiToken}
+                      className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

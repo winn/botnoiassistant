@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useChat } from '../../contexts/ChatContext';
 import ChatHistory from './ChatHistory';
 import ChatInput from './ChatInput';
+import { useSettings } from '../../contexts/SettingsContext';
 
 export default function ChatContainer({ 
   agent,
@@ -9,15 +10,21 @@ export default function ChatContainer({
   voiceState,
   streamingResponse,
   onSubmit,
-  conversations, // Add this prop
-  setConversations // Add this prop
+  conversations,
+  setConversations
 }) {
   const chatEndRef = useRef(null);
   const { conversations: contextConversations, setConversations: setContextConversations } = useChat();
+  const { textToSpeechEnabled } = useSettings();
 
   // Use either provided conversations or context conversations
   const currentConversations = conversations || contextConversations;
   const currentSetConversations = setConversations || setContextConversations;
+
+  // Auto-scroll effect
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentConversations, streamingResponse]);
 
   const handleSubmit = (input) => {
     if (!input.trim() || !onSubmit) return;
@@ -41,7 +48,7 @@ export default function ChatContainer({
       <div className="flex-shrink-0 bg-white/80 backdrop-blur border-t border-white/20">
         <ChatInput
           onSubmit={handleSubmit}
-          disabled={voiceState?.isProcessing || voiceState?.isSpeaking}
+          disabled={voiceState?.isProcessing || (textToSpeechEnabled && voiceState?.isSpeaking)}
         />
       </div>
     </div>

@@ -4,12 +4,13 @@ import { saveAgent, loadAgents } from '../services/storage';
 import { supabase } from '../lib/supabase';
 
 const DEFAULT_AGENT = {
-  id: crypto.randomUUID(),
+  id: 'default-agent',
   name: 'Eva',
-  character: 'เป็นเพื่อนผู้หญิงน่ารัก คอยช่วยเหลือ ใจดี',
-  actions: 'ให้ตอบสั้น ๆ เหมือนคุยกับเพื่อน ให้พูดไพเราะ ลงท้ายด้วยค่ะ แทนตัวเองว่า เอวา',
+  character: 'Eva is a friendly, knowledgeable, and patient AI assistant designed to help users navigate the AI builder platform. It uses simple, conversational language to make users feel comfortable and provides step-by-step guidance without overwhelming them. Aiden is proactive, offering tips and encouragement to keep users motivated. Its goal is to make building and sharing AI agents effortless and enjoyable.',
+  actions: 'Be Approachable: Use warm, conversational language and avoid technical jargon.\n\nProvide Clear Guidance: Break down tasks into simple, actionable steps.\n\nAnticipate Needs: Offer suggestions and tips before users ask for help.\n\nCelebrate Progress: Acknowledge user achievements and encourage exploration of new features.',
   enabled_tools: [],
-  faqs: []
+  faqs: [],
+  isDefault: true
 };
 
 export function useAgents() {
@@ -24,17 +25,10 @@ export function useAgents() {
         setIsLoading(true);
         const loadedAgents = await loadAgents();
         
-        if (loadedAgents?.length > 0) {
-          setAgents(loadedAgents);
-          setSelectedAgentId(loadedAgents[0].id);
-        } else {
-          // Save default agent if no agents exist
-          const savedAgent = await saveAgent(DEFAULT_AGENT);
-          if (savedAgent) {
-            setAgents([savedAgent]);
-            setSelectedAgentId(savedAgent.id);
-          }
-        }
+        // Always include default agent at the start
+        const filteredAgents = loadedAgents?.filter(a => a.id !== DEFAULT_AGENT.id) || [];
+        setAgents([DEFAULT_AGENT, ...filteredAgents]);
+        setSelectedAgentId(DEFAULT_AGENT.id);
       } catch (error) {
         console.error('Failed to load agents:', error);
         toast.error('Failed to load agents');
@@ -94,6 +88,12 @@ export function useAgents() {
 
   const handleSaveAgent = async (agentData) => {
     try {
+      // Prevent modifying default agent
+      if (agentData.id === DEFAULT_AGENT.id) {
+        toast.error('Cannot modify the default agent');
+        return false;
+      }
+
       const savedAgent = await saveAgent(agentData);
       if (savedAgent) {
         if (agentData.id) {
@@ -101,7 +101,7 @@ export function useAgents() {
             agent.id === agentData.id ? savedAgent : agent
           ));
         } else {
-          setAgents(prev => [...prev, savedAgent]);
+          setAgents(prev => [DEFAULT_AGENT, ...prev.filter(a => a.id !== DEFAULT_AGENT.id), savedAgent]);
           setSelectedAgentId(savedAgent.id);
         }
         toast.success(agentData.id ? 'Agent updated' : 'Agent created');
@@ -116,6 +116,12 @@ export function useAgents() {
   };
 
   const handleDeleteAgent = async (agentId) => {
+    // Prevent deleting default agent
+    if (agentId === DEFAULT_AGENT.id) {
+      toast.error('Cannot delete the default agent');
+      return false;
+    }
+
     try {
       const { error } = await supabase
         .from('agents')
@@ -124,21 +130,11 @@ export function useAgents() {
 
       if (error) throw error;
 
-      setAgents(prev => {
-        const newAgents = prev.filter(a => a.id !== agentId);
-        // If no agents left, add default agent
-        if (newAgents.length === 0) {
-          return [DEFAULT_AGENT];
-        }
-        return newAgents;
-      });
+      setAgents(prev => [DEFAULT_AGENT, ...prev.filter(a => a.id !== agentId && a.id !== DEFAULT_AGENT.id)]);
 
       // Update selected agent if needed
       if (selectedAgentId === agentId) {
-        setSelectedAgentId(prev => {
-          const remainingAgent = agents.find(a => a.id !== agentId);
-          return remainingAgent?.id || DEFAULT_AGENT.id;
-        });
+        setSelectedAgentId(DEFAULT_AGENT.id);
       }
 
       toast.success('Agent deleted successfully');

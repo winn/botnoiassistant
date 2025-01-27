@@ -249,7 +249,14 @@ serve(async (req) => {
 
       // Construct OpenAI messages
       const faqSection = agent.faqs?.length > 0
-        ? `\nFrequently Asked Questions:\n${agent.faqs.map((faq: any) => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n')}`
+        ? `\nKnowledge Base (HIGHEST PRIORITY):
+${agent.faqs.map((faq: any) => 
+  `Question: ${faq.question}
+Answer: ${faq.answer}`
+).join('\n\n')}\n\nIMPORTANT: When a user's question matches or is similar to any FAQ above:
+1. Use the FAQ answer as your primary source of information
+2. Give the exact answer to that FAQ question without any modification
+3. Prioritize FAQ knowledge over other responses, don't even try to modify the defined answer`
         : '';
 
       const toolsSection = tools?.length > 0

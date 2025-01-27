@@ -29,7 +29,6 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         });
         if (error) throw error;
 
-        // Load user data after successful login
         const [profile, agents, tools, openaiKey, botnoiToken] = await Promise.all([
           loadUserProfile(),
           loadAgents(),
@@ -38,7 +37,6 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
           loadCredential('botnoi')
         ]);
 
-        // Update credentials in SettingsContext
         if (openaiKey) setApiKey(openaiKey);
         if (botnoiToken) setBotnoiToken(botnoiToken);
 
@@ -81,7 +79,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black bg-opacity-25"
+              className="fixed inset-0 bg-[#262626] bg-opacity-25"
               onClick={onClose}
             />
             
@@ -89,16 +87,16 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-md relative z-10"
+              className="bg-[#ffffff] rounded-lg shadow-xl w-full max-w-md relative z-10"
             >
               <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-semibold">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-semibold text-[#262626]">
                     {isLogin ? 'Login' : 'Sign Up'}
                   </h2>
                   <button
                     onClick={onClose}
-                    className="p-2 hover:bg-gray-100 rounded-lg"
+                    className="p-2 hover:bg-[#01BFFB]/10 text-[#262626] rounded-lg transition-colors"
                   >
                     <XMarkIcon className="h-5 w-5" />
                   </button>
@@ -106,27 +104,27 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#262626] mb-1">
                       Email
                     </label>
                     <input
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#01BFFB] focus:border-[#01BFFB] transition-all"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#262626] mb-1">
                       Password
                     </label>
                     <input
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#01BFFB] focus:border-[#01BFFB] transition-all"
                       required
                     />
                   </div>
@@ -134,27 +132,27 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
                   {!isLogin && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[#262626] mb-1">
                           Username
                         </label>
                         <input
                           type="text"
                           value={formData.username}
                           onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#01BFFB] focus:border-[#01BFFB] transition-all"
                           required
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-[#262626] mb-1">
                           Full Name
                         </label>
                         <input
                           type="text"
                           value={formData.fullName}
                           onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-[#01BFFB] focus:border-[#01BFFB] transition-all"
                           required
                         />
                       </div>
@@ -164,11 +162,11 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className={`w-full py-2 px-4 rounded-lg text-white ${
+                    className={`w-full py-2 px-4 rounded-lg text-[#ffffff] ${
                       loading
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-sky-500 hover:bg-sky-600'
-                    }`}
+                        ? 'bg-[#262626] cursor-not-allowed opacity-50'
+                        : 'bg-[#01BFFB] hover:opacity-90'
+                    } transition-all`}
                   >
                     {loading ? 'Processing...' : isLogin ? 'Login' : 'Sign Up'}
                   </button>
@@ -177,7 +175,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
                     <button
                       type="button"
                       onClick={() => setIsLogin(!isLogin)}
-                      className="text-sm text-sky-600 hover:text-sky-700"
+                      className="text-sm text-[#01BFFB] hover:opacity-90 transition-colors"
                     >
                       {isLogin
                         ? "Don't have an account? Sign up"
