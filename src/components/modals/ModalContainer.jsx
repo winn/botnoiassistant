@@ -28,9 +28,11 @@ export default function ModalContainer({ tools, onSaveAgent, onSaveTool }) {
   };
 
   const handleClearHistory = async () => {
-    const success = await clearHistory(modalState.clearHistoryModal.agentId);
-    if (success) {
-      closeClearHistoryModal();
+    if (modalState.clearHistoryModal.agentId) {
+      const success = await clearHistory(modalState.clearHistoryModal.agentId);
+      if (success) {
+        closeClearHistoryModal();
+      }
     }
   };
 

@@ -18,24 +18,18 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
     method: 'GET',
     endpoint: '',
     headers: '{}',
-    body_template: '{}'
+    body: '{}'
   });
   const [isTesting, setIsTesting] = useState(false);
   const [testResponse, setTestResponse] = useState(null);
+  const [schemaFormat, setSchemaFormat] = useState('openai');
+  const [schemaEditorValue, setSchemaEditorValue] = useState('');
+  const [isTestingSchema, setIsTestingSchema] = useState(false);
+  const [schemaTestResult, setSchemaTestResult] = useState(null);
 
   useEffect(() => {
     if (tool) {
-      setFormData({
-        id: tool.id,
-        name: tool.name,
-        description: tool.description,
-        input: tool.input,
-        output: tool.output,
-        method: tool.method,
-        endpoint: tool.endpoint,
-        headers: tool.headers || '{}',
-        body_template: tool.body_template || '{}'
-      });
+      setFormData(tool);
     } else {
       setFormData({
         name: '',
@@ -51,110 +45,37 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
         method: 'GET',
         endpoint: '',
         headers: '{}',
-        body_template: '{}'
+        body: '{}'
       });
     }
     setTestResponse(null);
+    setSchemaEditorValue('');
   }, [tool]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name?.trim()) {
-      toast.error('Please enter a tool name');
-      return;
-    }
-
-    if (!formData.description?.trim()) {
-      toast.error('Please enter a tool description');
-      return;
-    }
-
-    if (!formData.endpoint?.trim()) {
-      toast.error('Please enter an API endpoint');
-      return;
-    }
-
+  const handleTest = async (functionCall = null) => {
     try {
-      // Validate JSON fields
-      JSON.parse(formData.input.schema);
-      JSON.parse(formData.output.schema);
-      JSON.parse(formData.headers);
-      JSON.parse(formData.body_template);
-    } catch (error) {
-      toast.error('Invalid JSON format in one or more fields');
-      return;
-    }
-
-    try {
-      await onSave(formData);
-      onClose(); // Close modal after successful save
-      toast.success(tool ? 'Tool updated successfully' : 'Tool created successfully');
-    } catch (error) {
-      toast.error('Failed to save tool');
-    }
-  };
-
-  const handleTest = async () => {
-    try {
-      setIsTesting(true);
-      setTestResponse(null);
-      
       if (!formData.endpoint) {
         throw new Error('Please provide an API endpoint');
       }
 
-      let headers = {};
-      let body = {};
-      let inputSchema = {};
+      setIsTesting(true);
+      setTestResponse(null);
 
-      try {
-        headers = JSON.parse(formData.headers || '{}');
-      } catch (e) {
-        throw new Error('Invalid JSON in Headers field');
+      // Parse headers and parameters
+      const headers = JSON.parse(formData.headers || '{}');
+      const params = functionCall ? 
+        JSON.parse(functionCall.arguments) : 
+        JSON.parse(formData.body || '{}');
+
+      // Create URL with query parameters for GET requests
+      const url = new URL(formData.endpoint);
+      if (formData.method === 'GET') {
+        Object.entries(params).forEach(([key, value]) => {
+          url.searchParams.append(key, String(value));
+        });
       }
 
-      try {
-        body = JSON.parse(formData.body_template || '{}');
-      } catch (e) {
-        throw new Error('Invalid JSON in Body Template field');
-      }
-
-      try {
-        inputSchema = JSON.parse(formData.input.schema || '{}');
-      } catch (e) {
-        throw new Error('Invalid JSON in Input Schema field');
-      }
-      
-      const testData = {};
-      Object.keys(inputSchema.properties || {}).forEach(key => {
-        const prop = inputSchema.properties[key];
-        switch (prop.type) {
-          case 'string':
-            testData[key] = 'test_string';
-            break;
-          case 'number':
-            testData[key] = 123;
-            break;
-          case 'boolean':
-            testData[key] = true;
-            break;
-          case 'array':
-            testData[key] = [];
-            break;
-          case 'object':
-            testData[key] = {};
-            break;
-          default:
-            testData[key] = null;
-        }
-      });
-
-      const processedBody = JSON.stringify(body).replace(
-        /{{\s*([^}]+)\s*}}/g,
-        (_, key) => JSON.stringify(testData[key])
-      );
-
+      // Prepare request configuration
       const requestConfig = {
         method: formData.method,
         headers: {
@@ -163,58 +84,352 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
         }
       };
 
+      // Only add body for POST requests
       if (formData.method === 'POST') {
         requestConfig.headers['Content-Type'] = 'application/json';
-        requestConfig.body = processedBody;
+        requestConfig.body = JSON.stringify(params);
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      requestConfig.signal = controller.signal;
+      // Make the request
+      const response = await fetch(url.toString(), requestConfig);
+      
+      // Handle response
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(`API returned non-JSON response (${contentType || 'no content type'}): ${text}`);
+      }
 
-      try {
-        const response = await fetch(formData.endpoint, requestConfig);
-        clearTimeout(timeout);
+      const result = {
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries()),
+        data
+      };
 
-        const contentType = response.headers.get('content-type');
-        let data;
-        
-        if (contentType && contentType.includes('application/json')) {
-          data = await response.json();
-        } else {
-          data = await response.text();
-          throw new Error(`API returned non-JSON response (${contentType || 'no content type'})`);
-        }
-        
-        setTestResponse({
-          status: response.status,
-          headers: Object.fromEntries(response.headers.entries()),
-          data
-        });
+      if (!functionCall) {
+        setTestResponse(result);
+      }
 
-        if (response.ok) {
+      if (response.ok) {
+        if (!functionCall) {
           toast.success('API test successful!');
-        } else {
-          throw new Error(
-            data.message || 
-            `API request failed with status ${response.status}`
-          );
         }
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          throw new Error('Request timed out after 10 seconds');
-        }
-        throw error;
+        return result;
+      } else {
+        throw new Error(data.message || `API request failed with status ${response.status}`);
       }
     } catch (error) {
-      setTestResponse({
+      console.error('Error testing API:', error);
+      const errorResult = {
         error: true,
         message: error.message
-      });
-      toast.error(error.message || 'Failed to test API');
+      };
+
+      if (!functionCall) {
+        setTestResponse(errorResult);
+        toast.error(error.message || 'Failed to test API');
+      }
+      throw error;
     } finally {
-      setIsTesting(false);
+      if (!functionCall) {
+        setIsTesting(false);
+      }
     }
+  };
+
+  const testSchema = async () => {
+    try {
+      setIsTestingSchema(true);
+      setSchemaTestResult(null);
+
+      const schema = JSON.parse(schemaEditorValue);
+      let functionCall;
+
+      // Create test function call based on schema format
+      switch (schemaFormat) {
+        case 'openai': {
+          const path = schema.paths['/'] || Object.values(schema.paths)[0];
+          const operation = path[Object.keys(path)[0]];
+          const parameters = operation.parameters || [];
+          
+          // Create test parameters
+          const testParams = {};
+          parameters.forEach(param => {
+            switch (param.schema.type) {
+              case 'string':
+                testParams[param.name] = 'test_string';
+                break;
+              case 'number':
+                testParams[param.name] = 123;
+                break;
+              case 'boolean':
+                testParams[param.name] = true;
+                break;
+              default:
+                testParams[param.name] = null;
+            }
+          });
+
+          functionCall = {
+            name: operation.operationId,
+            arguments: JSON.stringify(testParams)
+          };
+          break;
+        }
+        
+        case 'claude': {
+          functionCall = {
+            name: schema.function.name,
+            arguments: JSON.stringify({
+              query: 'test_query',
+              api_url: formData.endpoint
+            })
+          };
+          break;
+        }
+
+        case 'gemini': {
+          const toolFunction = schema.tools[0].functionDeclarations[0];
+          functionCall = {
+            name: toolFunction.name,
+            arguments: JSON.stringify({
+              api_url: formData.endpoint,
+              method: formData.method,
+              params: { query: 'test_query' }
+            })
+          };
+          break;
+        }
+
+        default:
+          throw new Error(`Unsupported schema format: ${schemaFormat}`);
+      }
+
+      // Test the function call
+      const result = await handleTest(functionCall);
+      setSchemaTestResult({
+        success: true,
+        functionCall,
+        response: result
+      });
+      toast.success('Schema test successful!');
+    } catch (error) {
+      console.error('Schema test error:', error);
+      setSchemaTestResult({
+        success: false,
+        error: error.message
+      });
+      toast.error(`Schema test failed: ${error.message}`);
+    } finally {
+      setIsTestingSchema(false);
+    }
+  };
+
+  const generateSchema = () => {
+    try {
+      const inputSchema = JSON.parse(formData.input.schema);
+      const outputSchema = JSON.parse(formData.output.schema);
+      const headers = JSON.parse(formData.headers);
+
+      let schema;
+      switch (schemaFormat) {
+        case 'openai':
+          schema = {
+            openapi: "3.1.0",
+            info: {
+              title: formData.name,
+              description: formData.description,
+              version: "v1.0.0"
+            },
+            servers: [
+              {
+                url: formData.endpoint
+              }
+            ],
+            paths: {
+              "/": {
+                [formData.method.toLowerCase()]: {
+                  description: formData.description,
+                  operationId: formData.name.replace(/[^a-zA-Z0-9]/g, ''),
+                  parameters: Object.entries(inputSchema.properties || {}).map(([key, prop]) => ({
+                    name: key,
+                    in: formData.method === 'GET' ? 'query' : 'body',
+                    description: prop.description || `The ${key} parameter`,
+                    required: (inputSchema.required || []).includes(key),
+                    schema: {
+                      type: prop.type,
+                      ...(prop.enum ? { enum: prop.enum } : {}),
+                      ...(prop.default ? { default: prop.default } : {})
+                    }
+                  })),
+                  responses: {
+                    "200": {
+                      description: formData.output.description || "Successful response",
+                      content: {
+                        "application/json": {
+                          schema: outputSchema
+                        }
+                      }
+                    }
+                  },
+                  deprecated: false
+                }
+              }
+            },
+            components: {
+              schemas: {}
+            }
+          };
+
+          // Add security if headers contain authorization
+          if (headers.Authorization || headers.authorization) {
+            schema.components.securitySchemes = {
+              BearerAuth: {
+                type: "http",
+                scheme: "bearer"
+              }
+            };
+            schema.security = [{ BearerAuth: [] }];
+          }
+          break;
+
+        case 'claude':
+          schema = {
+            type: 'function',
+            function: {
+              name: formData.name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+              description: formData.description,
+              parameters: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                    description: formData.input.description
+                  },
+                  api_url: {
+                    type: 'string',
+                    description: 'API endpoint URL',
+                    default: formData.endpoint
+                  }
+                },
+                required: ['query']
+              }
+            }
+          };
+          break;
+
+        case 'gemini':
+          schema = {
+            tools: [{
+              functionDeclarations: [{
+                name: formData.name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+                description: `${formData.description}\n\nEndpoint: ${formData.endpoint}`,
+                parameters: {
+                  type: "OBJECT",
+                  properties: {
+                    api_url: {
+                      type: "STRING",
+                      description: "API endpoint URL",
+                      default: formData.endpoint
+                    },
+                    method: {
+                      type: "STRING",
+                      description: "HTTP method",
+                      enum: ["GET", "POST"],
+                      default: formData.method
+                    },
+                    headers: {
+                      type: "OBJECT",
+                      description: "Optional headers for the request",
+                      default: headers
+                    },
+                    params: {
+                      type: "OBJECT",
+                      description: "Optional query parameters or body data",
+                      default: {}
+                    }
+                  },
+                  required: ["api_url"]
+                }
+              }]
+            }]
+          };
+          break;
+      }
+
+      setSchemaEditorValue(JSON.stringify(schema, null, 2));
+      toast.success(`${schemaFormat.toUpperCase()} schema generated successfully`);
+    } catch (error) {
+      console.error('Error generating schema:', error);
+      toast.error('Failed to generate schema. Please check your input/output schemas.');
+    }
+  };
+
+  const handleSchemaChange = (value) => {
+    setSchemaEditorValue(value);
+    try {
+      const schema = JSON.parse(value);
+      
+      // Extract tool configuration based on schema format
+      if (schemaFormat === 'openai' && schema.openapi) {
+        const path = schema.paths['/'] || Object.values(schema.paths)[0];
+        const method = Object.keys(path)[0].toUpperCase();
+        const operation = path[Object.keys(path)[0]];
+        const parameters = operation.parameters || [];
+        
+        // Build input schema from parameters
+        const inputProperties = {};
+        const required = [];
+        parameters.forEach(param => {
+          inputProperties[param.name] = {
+            type: param.schema.type,
+            description: param.description,
+            ...(param.schema.enum ? { enum: param.schema.enum } : {}),
+            ...(param.schema.default ? { default: param.schema.default } : {})
+          };
+          if (param.required) {
+            required.push(param.name);
+          }
+        });
+
+        // Extract output schema from responses
+        const outputSchema = operation.responses['200']?.content?.['application/json']?.schema || {};
+
+        // Update form data
+        setFormData(prev => ({
+          ...prev,
+          name: schema.info.title || prev.name,
+          description: schema.info.description || prev.description,
+          method,
+          endpoint: schema.servers?.[0]?.url || prev.endpoint,
+          input: {
+            description: operation.description || prev.input.description,
+            schema: JSON.stringify({ 
+              type: 'object',
+              properties: inputProperties,
+              required
+            }, null, 2)
+          },
+          output: {
+            description: operation.responses['200']?.description || prev.output.description,
+            schema: JSON.stringify(outputSchema, null, 2)
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error parsing schema:', error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    onSave(formData);
+    onClose();
+    toast.success(tool ? 'Tool updated successfully' : 'Tool added successfully');
   };
 
   return (
@@ -396,12 +611,76 @@ export default function ToolModal({ isOpen, onClose, onSave, tool }) {
                         Body Template (JSON)
                       </label>
                       <textarea
-                        value={formData.body_template}
-                        onChange={(e) => setFormData({ ...formData, body_template: e.target.value })}
+                        value={formData.body}
+                        onChange={(e) => setFormData({ ...formData, body: e.target.value })}
                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"
                         rows="3"
                         placeholder="{}"
                       />
+                    </div>
+                  )}
+                </div>
+
+                {/* Schema Generation */}
+                <div className="space-y-4">
+                  <div className="flex items-end space-x-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Schema Format
+                      </label>
+                      <select
+                        value={schemaFormat}
+                        onChange={(e) => setSchemaFormat(e.target.value)}
+                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                      >
+                        <option value="openai">OpenAI</option>
+                        <option value="claude">Claude</option>
+                        <option value="gemini">Gemini</option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={generateSchema}
+                      className="px-4 py-2 bg-sky-100 text-sky-700 rounded-lg hover:bg-sky-200 transition-colors"
+                    >
+                      Generate Schema
+                    </button>
+                  </div>
+                  
+                  {schemaEditorValue && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Generated Schema
+                        </label>
+                        <textarea
+                          value={schemaEditorValue}
+                          onChange={(e) => handleSchemaChange(e.target.value)}
+                          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"
+                          rows="8"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={testSchema}
+                          disabled={isTestingSchema}
+                          className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isTestingSchema ? 'Testing...' : 'Test Schema'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {schemaTestResult && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">
+                        Schema Test Result
+                      </h3>
+                      <pre className="text-xs bg-white p-3 rounded border overflow-auto max-h-60">
+                        {JSON.stringify(schemaTestResult, null, 2)}
+                      </pre>
                     </div>
                   )}
                 </div>

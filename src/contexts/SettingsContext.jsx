@@ -3,57 +3,128 @@ import { saveCredential, loadCredential } from '../services/storage';
 import { useAuth } from './AuthContext';
 import { toast } from 'react-hot-toast';
 
-const SettingsContext = createContext();
+const SettingsContext = createContext(null);
 
 export function SettingsProvider({ children }) {
-  const [apiKey, setApiKey] = useState('');
-  const [botnoiToken, setBotnoiToken] = useState('');
-  const [speechRecognitionEnabled, setSpeechRecognitionEnabled] = useState(true);
-  const [textToSpeechEnabled, setTextToSpeechEnabled] = useState(true);
+  const [settings, setSettings] = useState({
+    openaiKey: '',
+    claudeKey: '',
+    geminiKey: '',
+    botnoiToken: '',
+    speechRecognitionEnabled: true,
+    textToSpeechEnabled: true
+  });
+  
   const { user } = useAuth();
 
   // Load credentials whenever user changes
   useEffect(() => {
     async function loadCredentials() {
-      console.log('Loading credentials for user:', user?.id);
-      const savedApiKey = await loadCredential('openai');
-      const savedBotnoiToken = await loadCredential('botnoi');
-      if (savedApiKey) setApiKey(savedApiKey);
-      if (savedBotnoiToken) setBotnoiToken(savedBotnoiToken);
+      if (user) {
+        try {
+          const [
+            savedOpenaiKey,
+            savedClaudeKey,
+            savedGeminiKey,
+            savedBotnoiToken
+          ] = await Promise.all([
+            loadCredential('openai'),
+            loadCredential('claude'),
+            loadCredential('gemini'),
+            loadCredential('botnoi')
+          ]);
+
+          setSettings(prev => ({
+            ...prev,
+            openaiKey: savedOpenaiKey || '',
+            claudeKey: savedClaudeKey || '',
+            geminiKey: savedGeminiKey || '',
+            botnoiToken: savedBotnoiToken || ''
+          }));
+        } catch (error) {
+          console.error('Failed to load credentials:', error);
+          toast.error('Failed to load saved credentials');
+        }
+      }
     }
     loadCredentials();
-  }, [user]); // Reload when user changes
+  }, [user]);
 
-  const handleApiKeyChange = async (newApiKey) => {
-    setApiKey(newApiKey);
-    
-    if (newApiKey) {
-      const saved = await saveCredential('openai', newApiKey);
-      if (saved) {
-        toast.success('API key saved successfully');
+  const setOpenaiKey = async (newKey) => {
+    try {
+      setSettings(prev => ({ ...prev, openaiKey: newKey }));
+      if (newKey) {
+        await saveCredential('openai', newKey);
+        toast.success('OpenAI API key saved successfully');
       }
+    } catch (error) {
+      console.error('Failed to save OpenAI key:', error);
+      toast.error('Failed to save OpenAI key');
     }
   };
 
-  const handleBotnoiTokenChange = async (newToken) => {
-    setBotnoiToken(newToken);
-    
-    if (newToken) {
-      const saved = await saveCredential('botnoi', newToken);
-      if (saved) {
+  const setClaudeKey = async (newKey) => {
+    try {
+      setSettings(prev => ({ ...prev, claudeKey: newKey }));
+      if (newKey) {
+        await saveCredential('claude', newKey);
+        toast.success('Claude API key saved successfully');
+      }
+    } catch (error) {
+      console.error('Failed to save Claude key:', error);
+      toast.error('Failed to save Claude key');
+    }
+  };
+
+  const setGeminiKey = async (newKey) => {
+    try {
+      setSettings(prev => ({ ...prev, geminiKey: newKey }));
+      if (newKey) {
+        await saveCredential('gemini', newKey);
+        toast.success('Gemini API key saved successfully');
+      }
+    } catch (error) {
+      console.error('Failed to save Gemini key:', error);
+      toast.error('Failed to save Gemini key');
+    }
+  };
+
+  const setBotnoiToken = async (newToken) => {
+    try {
+      setSettings(prev => ({ ...prev, botnoiToken: newToken }));
+      if (newToken) {
+        await saveCredential('botnoi', newToken);
         toast.success('Botnoi token saved successfully');
       }
+    } catch (error) {
+      console.error('Failed to save Botnoi token:', error);
+      toast.error('Failed to save Botnoi token');
     }
+  };
+
+  const setSpeechRecognitionEnabled = (enabled) => {
+    setSettings(prev => ({ ...prev, speechRecognitionEnabled: enabled }));
+  };
+
+  const setTextToSpeechEnabled = (enabled) => {
+    setSettings(prev => ({ ...prev, textToSpeechEnabled: enabled }));
   };
 
   const value = {
-    apiKey,
-    setApiKey: handleApiKeyChange,
-    botnoiToken,
-    setBotnoiToken: handleBotnoiTokenChange,
-    speechRecognitionEnabled,
+    // API Keys
+    openaiKey: settings.openaiKey,
+    setOpenaiKey,
+    claudeKey: settings.claudeKey,
+    setClaudeKey,
+    geminiKey: settings.geminiKey,
+    setGeminiKey,
+    botnoiToken: settings.botnoiToken,
+    setBotnoiToken,
+    
+    // Feature Flags
+    speechRecognitionEnabled: settings.speechRecognitionEnabled,
     setSpeechRecognitionEnabled,
-    textToSpeechEnabled,
+    textToSpeechEnabled: settings.textToSpeechEnabled,
     setTextToSpeechEnabled
   };
 

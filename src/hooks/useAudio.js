@@ -42,6 +42,13 @@ export function useAudio({ onPlaybackComplete }) {
       return false;
     }
 
+    // Validate text input
+    if (!text?.trim()) {
+      console.log('Empty text provided to TTS, skipping audio playback');
+      onPlaybackComplete?.();
+      return false;
+    }
+
     console.log('Starting audio playback');
     
     try {
@@ -84,14 +91,7 @@ export function useAudio({ onPlaybackComplete }) {
 
       // If no pre-generated audio URL and we have a token, generate audio
       if (!botnoiToken) {
-        console.error('No audio URL or Botnoi token available');
-        onPlaybackComplete?.();
-        return false;
-      }
-
-      if (!text?.trim()) {
-        console.error('Empty text provided to TTS');
-        toast.error('No text to convert to speech');
+        console.log('No audio URL or Botnoi token available');
         onPlaybackComplete?.();
         return false;
       }

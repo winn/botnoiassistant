@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import ChatContainer from '../chat/ChatContainer';
-import { useChat } from '../../hooks/useChat';
 import { useAudio } from '../../hooks/useAudio';
 import { useVoiceState } from '../../hooks/useVoiceState';
 import LoadingSpinner from './feedback/LoadingSpinner';
@@ -104,17 +103,6 @@ export default function SharedAgentView({ tools }) {
         throw new Error(responseData.error || 'Failed to process request');
       }
 
-      // Add debug information
-      const debug = {
-        timestamp: new Date().toISOString(),
-        sessionId,
-        agentId: agent.id,
-        input,
-        response: responseData,
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries())
-      };
-
       // Update conversation with AI response
       setConversations(prev => ({
         ...prev,
@@ -124,7 +112,7 @@ export default function SharedAgentView({ tools }) {
                 ...conv,
                 aiResponse: responseData.response,
                 audioUrl: responseData.audio_url,
-                debug
+                debug: responseData.debug
               }
             : conv
         )
@@ -139,32 +127,6 @@ export default function SharedAgentView({ tools }) {
 
     } catch (error) {
       console.error('Error processing request:', error);
-      
-      // Add error to debug information
-      const debug = {
-        timestamp: new Date().toISOString(),
-        sessionId,
-        agentId: agent.id,
-        input,
-        error: {
-          message: error.message,
-          stack: error.stack
-        }
-      };
-
-      setConversations(prev => ({
-        ...prev,
-        [agent.id]: prev[agent.id].map(conv => 
-          conv.timestamp === timestamp
-            ? {
-                ...conv,
-                error: error.message,
-                debug
-              }
-            : conv
-        )
-      }));
-
       toast.error(error.message || 'Failed to process request');
       voiceState.finishSpeaking();
     }
@@ -199,7 +161,8 @@ export default function SharedAgentView({ tools }) {
           enabled_tools,
           faqs,
           is_public,
-          session_quota
+          session_quota,
+          greeting
         `)
         .eq('id', shareId)
         .eq('is_public', true)
@@ -215,8 +178,7 @@ export default function SharedAgentView({ tools }) {
       }
 
       setAgent(publicAgent);
-      setConversations({ [publicAgent.id]: [] });
-      
+
       // Initialize session
       const timestamp = Date.now();
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/proxy`, {
@@ -237,6 +199,9 @@ export default function SharedAgentView({ tools }) {
       }
 
       setSessionId(data.sessionId);
+      
+      // Initialize empty conversations state
+      setConversations({ [publicAgent.id]: [] });
 
     } catch (error) {
       console.error('Error loading shared agent:', error);

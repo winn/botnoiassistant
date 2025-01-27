@@ -13,78 +13,6 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 );
 
-// Cache for frequently accessed data
-const cache = {
-  agents: new Map<string, any>(),
-  credentials: new Map<string, any>(),
-  tools: new Map<string, any[]>(),
-};
-
-// Fetch agent data with caching
-async function fetchAgent(agentId: string) {
-  if (cache.agents.has(agentId)) {
-    return cache.agents.get(agentId);
-  }
-
-  const { data: agent, error } = await supabase
-    .from('agents')
-    .select('id, name, character, actions, enabled_tools, faqs, user_id, session_quota')
-    .eq('id', agentId)
-    .eq('is_public', true)
-    .single();
-
-  if (error || !agent) {
-    throw new Error('Agent not found or not public');
-  }
-
-  cache.agents.set(agentId, agent);
-  return agent;
-}
-
-// Fetch credentials with caching
-async function fetchCredentials(userId: string) {
-  if (cache.credentials.has(userId)) {
-    return cache.credentials.get(userId);
-  }
-
-  const { data: credentials, error } = await supabase
-    .from('credentials')
-    .select('name, value')
-    .eq('user_id', userId)
-    .in('name', ['openai', 'botnoi']);
-
-  if (error) {
-    throw new Error('Failed to get credentials');
-  }
-
-  const credentialsObj = credentials.reduce((acc, curr) => {
-    acc[curr.name] = curr.value;
-    return acc;
-  }, {});
-
-  cache.credentials.set(userId, credentialsObj);
-  return credentialsObj;
-}
-
-// Fetch tools with caching
-async function fetchTools(agentId: string, enabledTools: string[]) {
-  if (cache.tools.has(agentId)) {
-    return cache.tools.get(agentId);
-  }
-
-  const { data: tools, error } = await supabase
-    .from('tools')
-    .select('*')
-    .in('id', enabledTools);
-
-  if (error) {
-    throw new Error('Failed to get tools');
-  }
-
-  cache.tools.set(agentId, tools);
-  return tools;
-}
-
 // Process OpenAI chat
 async function processOpenAIChat(messages: any[], functions: any[], apiKey: string) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -94,7 +22,7 @@ async function processOpenAIChat(messages: any[], functions: any[], apiKey: stri
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4',
       messages,
       functions,
       function_call: functions?.length ? 'auto' : undefined,
@@ -110,102 +38,81 @@ async function processOpenAIChat(messages: any[], functions: any[], apiKey: stri
   return await response.json();
 }
 
-// Generate Botnoi audio
-async function generateBotnoiAudio(text: string, token: string) {
-  const response = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
+// Process Claude chat
+async function processClaudeChat(messages: any[], functions: any[], apiKey: string) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'Botnoi-Token': token,
-      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
     },
     body: JSON.stringify({
-      text: text.trim(),
-      speaker: '1',
-      volume: 1,
-      speed: 1,
-      type_media: 'mp3',
-      save_file: true,
-      language: 'th',
-    }),
+      model: 'claude-3-haiku-20240307',
+      messages: messages.map(msg => ({
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.content
+      })),
+      tools: functions.map(fn => ({
+        type: 'function',
+        function: {
+          name: fn.name,
+          description: fn.description,
+          parameters: fn.parameters
+        }
+      })),
+      max_tokens: 4096,
+      temperature: 0.7
+    })
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.message || `Botnoi API failed with status ${response.status}`);
+    throw new Error(error.error?.message || `Claude API failed with status ${response.status}`);
   }
 
   return await response.json();
 }
 
-// Convert tool to OpenAI function
-function convertToolToFunction(tool: any) {
-  try {
-    const inputSchema = typeof tool.input === 'string' ? JSON.parse(tool.input) : tool.input;
+// Process Gemini chat
+async function processGeminiChat(messages: any[], functions: any[], apiKey: string) {
+  const systemMessage = messages.find(m => m.role === 'system');
+  const otherMessages = messages.filter(m => m.role !== 'system');
 
-    return {
-      name: tool.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_'),
-      description: `${tool.description}\n\nInput: ${inputSchema.description}\nOutput: ${tool.output.description}`,
-      parameters: inputSchema.schema ? JSON.parse(inputSchema.schema) : {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: inputSchema.description || 'Input query',
-          },
-        },
-        required: ['query'],
-      },
-    };
-  } catch (error) {
-    console.error('Error converting tool to function:', error);
-    return null;
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [
+        ...(systemMessage ? [{
+          role: 'user',
+          parts: [{ text: `System Instructions: ${systemMessage.content}` }]
+        }] : []),
+        ...otherMessages.map(msg => ({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }]
+        }))
+      ],
+      tools: [{
+        function_declarations: functions
+      }],
+      generation_config: {
+        temperature: 0.7,
+        top_p: 0.8,
+        top_k: 40,
+        max_output_tokens: 4096
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || `Gemini API failed with status ${response.status}`);
   }
-}
 
-// Execute tool function
-async function executeToolFunction(tool: any, parameters: any) {
-  try {
-    const headers = typeof tool.headers === 'string' ? JSON.parse(tool.headers) : tool.headers || {};
-    const requestConfig: any = {
-      method: tool.method,
-      headers: {
-        Accept: 'application/json',
-        ...headers,
-      },
-    };
-
-    if (tool.method === 'POST') {
-      requestConfig.headers['Content-Type'] = 'application/json';
-      const bodyTemplate = typeof tool.body === 'string' ? JSON.parse(tool.body) : tool.body || {};
-      const processedBody = JSON.stringify(bodyTemplate).replace(
-        /{{\s*([^}]+)\s*}}/g,
-        (_, key) => JSON.stringify(parameters[key])
-      );
-      requestConfig.body = processedBody;
-    }
-
-    const response = await fetch(tool.endpoint, requestConfig);
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    return {
-      success: true,
-      data,
-      tool_name: tool.name,
-      description: tool.description,
-      input: parameters,
-      output: data,
-    };
-  } catch (error) {
-    console.error('Error executing tool function:', error);
-    return {
-      success: false,
-      error: error.message,
-      tool_name: tool.name,
-    };
-  }
+  return await response.json();
 }
 
 // Handle incoming requests
@@ -230,6 +137,20 @@ serve(async (req) => {
       fetchTools(agentId, agent.enabled_tools),
     ]);
 
+    // Get appropriate API key based on LLM engine
+    const apiKey = (() => {
+      switch (agent.llm_engine) {
+        case 'gpt-4': return credentials.openai;
+        case 'claude': return credentials.claude;
+        case 'gemini': return credentials.gemini;
+        default: return credentials.openai;
+      }
+    })();
+
+    if (!apiKey) {
+      throw new Error(`API key not found for ${agent.llm_engine}`);
+    }
+
     // Handle existing session
     if (existingSessionId && message) {
       const { data: currentSession, error: sessionError } = await supabase
@@ -247,9 +168,135 @@ serve(async (req) => {
         throw new Error('Session quota exceeded');
       }
 
-      // Construct OpenAI messages
-      const faqSection = agent.faqs?.length > 0
-        ? `\nKnowledge Base (HIGHEST PRIORITY):
+      // Construct messages array
+      const conversationHistory = currentSession.conversation_history || [];
+      conversationHistory.push({ role: 'user', content: message });
+
+      // Process message based on LLM engine
+      let response;
+      try {
+        switch (agent.llm_engine) {
+          case 'gpt-4':
+            response = await processOpenAIChat(conversationHistory, tools, apiKey);
+            break;
+          case 'claude':
+            response = await processClaudeChat(conversationHistory, tools, apiKey);
+            break;
+          case 'gemini':
+            response = await processGeminiChat(conversationHistory, tools, apiKey);
+            break;
+          default:
+            throw new Error(`Unsupported LLM engine: ${agent.llm_engine}`);
+        }
+      } catch (error) {
+        throw new Error(`LLM API Error: ${error.message}`);
+      }
+
+      // Handle function calls
+      let finalResponse = '';
+      if (response.choices?.[0]?.message?.function_call) {
+        const functionCall = response.choices[0].message.function_call;
+        const tool = tools.find(t => 
+          t.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') === functionCall.name
+        );
+
+        if (tool) {
+          const args = JSON.parse(functionCall.arguments);
+          const functionResult = await executeToolFunction(tool, args);
+
+          // Add function call and result to conversation
+          conversationHistory.push({
+            role: 'assistant',
+            content: null,
+            function_call: functionCall
+          });
+          conversationHistory.push({
+            role: 'function',
+            name: functionCall.name,
+            content: JSON.stringify(functionResult)
+          });
+
+          // Get final response
+          const finalLLMResponse = await processOpenAIChat(conversationHistory, tools, apiKey);
+          finalResponse = finalLLMResponse.choices[0].message.content;
+        }
+      } else {
+        finalResponse = response.choices[0].message.content;
+      }
+
+      // Add assistant response to conversation
+      conversationHistory.push({ role: 'assistant', content: finalResponse });
+
+      // Generate audio if Botnoi token exists
+      let audioUrl = null;
+      if (credentials.botnoi) {
+        try {
+          const botnoiResponse = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
+            method: 'POST',
+            headers: {
+              'Botnoi-Token': credentials.botnoi,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              text: finalResponse.trim(),
+              speaker: "1",
+              volume: 1,
+              speed: 1,
+              type_media: "mp3",
+              save_file: true,
+              language: "th"
+            })
+          });
+
+          if (botnoiResponse.ok) {
+            const botnoiData = await botnoiResponse.json();
+            audioUrl = botnoiData.audio_url;
+          }
+        } catch (error) {
+          console.error('Botnoi API Error:', error);
+        }
+      }
+
+      // Update session
+      await supabase
+        .from('shared_sessions')
+        .update({
+          message_count: (currentSession.message_count || 0) + 1,
+          daily_usage: (currentSession.daily_usage || 0) + 1,
+          last_message_at: new Date().toISOString(),
+          conversation_history: conversationHistory,
+        })
+        .eq('session_id', existingSessionId)
+        .eq('agent_id', agentId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: finalResponse,
+          audio_url: audioUrl
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    }
+
+    // Handle new session
+    if (!timestamp) {
+      throw new Error('Missing timestamp for new session');
+    }
+
+    const sessionId = `${agentId}_${timestamp}`;
+    
+    // Initialize conversation history
+    const conversationHistory = [];
+    
+    // Add system prompt
+    const faqSection = agent.faqs?.length > 0
+      ? `\nKnowledge Base (HIGHEST PRIORITY):
 ${agent.faqs.map((faq: any) => 
   `Question: ${faq.question}
 Answer: ${faq.answer}`
@@ -257,15 +304,15 @@ Answer: ${faq.answer}`
 1. Use the FAQ answer as your primary source of information
 2. Give the exact answer to that FAQ question without any modification
 3. Prioritize FAQ knowledge over other responses, don't even try to modify the defined answer`
-        : '';
+      : '';
 
-      const toolsSection = tools?.length > 0
-        ? `\n\nAvailable Tools:\n${tools.map((tool: any, index: number) => 
-            `${index + 1}. ${tool.name}\n   Description: ${tool.description}\n   Input: ${tool.input.description}\n   Output: ${tool.output.description}`
-          ).join('\n\n')}`
-        : '';
+    const toolsSection = tools?.length > 0
+      ? `\n\nAvailable Tools:\n${tools.map((tool: any, index: number) => 
+          `${index + 1}. ${tool.name}\n   Description: ${tool.description}\n   Input: ${tool.input.description}\n   Output: ${tool.output.description}`
+        ).join('\n\n')}`
+      : '';
 
-      const systemPrompt = `Character Description:
+    const systemPrompt = `Character Description:
 ${agent.character}
 
 Behavior Instructions:
@@ -283,99 +330,9 @@ Instructions for Tool Usage:
 4. Always maintain the character and behavior defined above
 5. Integrate knowledge from FAQs naturally into your responses${toolsSection}`;
 
-      const conversationHistory = currentSession.conversation_history || [];
-      if (conversationHistory.length === 0) {
-        conversationHistory.push({ role: 'system', content: systemPrompt });
-      }
+    conversationHistory.push({ role: 'system', content: systemPrompt });
 
-      conversationHistory.push({ role: 'user', content: message });
-
-      const functions = tools.map(convertToolToFunction).filter(Boolean);
-      const openaiResponse = await processOpenAIChat(conversationHistory, functions, credentials.openai);
-
-      let finalResponse = '';
-      const debug = {
-        timestamp: new Date().toISOString(),
-        functions,
-        initialResponse: openaiResponse,
-      };
-
-      if (openaiResponse.choices[0].message.function_call) {
-        debug.functionCall = openaiResponse.choices[0].message.function_call;
-
-        const functionName = openaiResponse.choices[0].message.function_call.name;
-        const tool = tools.find((t: any) => 
-          t.name.toLowerCase().replace(/[^a-z0-9_-]/g, '_') === functionName
-        );
-
-        if (!tool) {
-          throw new Error(`Function ${functionName} not found in tools`);
-        }
-
-        const args = JSON.parse(openaiResponse.choices[0].message.function_call.arguments);
-        const functionResult = await executeToolFunction(tool, args);
-        debug.functionResult = functionResult;
-
-        conversationHistory.push(openaiResponse.choices[0].message);
-        conversationHistory.push({
-          role: 'function',
-          name: functionName,
-          content: JSON.stringify(functionResult),
-        });
-
-        const finalOpenAIResponse = await processOpenAIChat(conversationHistory, functions, credentials.openai);
-        debug.finalResponse = finalOpenAIResponse;
-        finalResponse = finalOpenAIResponse.choices[0].message.content;
-
-        conversationHistory.push({ role: 'assistant', content: finalResponse });
-      } else {
-        finalResponse = openaiResponse.choices[0].message.content;
-        conversationHistory.push({ role: 'assistant', content: finalResponse });
-      }
-
-      let audioUrl = null;
-      if (credentials.botnoi) {
-        try {
-          const botnoiResponse = await generateBotnoiAudio(finalResponse, credentials.botnoi);
-          audioUrl = botnoiResponse.audio_url;
-        } catch (error) {
-          console.error('Botnoi API Error:', error);
-        }
-      }
-
-      await supabase
-        .from('shared_sessions')
-        .update({
-          message_count: (currentSession.message_count || 0) + 1,
-          daily_usage: (currentSession.daily_usage || 0) + 1,
-          last_message_at: new Date().toISOString(),
-          conversation_history: conversationHistory,
-        })
-        .eq('session_id', existingSessionId)
-        .eq('agent_id', agentId);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          response: finalResponse,
-          audio_url: audioUrl,
-          debug,
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    }
-
-    // Handle new session
-    if (!timestamp) {
-      throw new Error('Missing timestamp for new session');
-    }
-
-    const sessionId = `${agentId}_${timestamp}`;
+    // Create new session
     const { data: session, error: sessionError } = await supabase
       .from('shared_sessions')
       .insert({
@@ -384,7 +341,7 @@ Instructions for Tool Usage:
         message_count: 0,
         daily_usage: 0,
         session_quota: agent.session_quota,
-        conversation_history: [],
+        conversation_history: conversationHistory,
         last_message_at: new Date().toISOString(),
       })
       .select()
@@ -392,6 +349,36 @@ Instructions for Tool Usage:
 
     if (sessionError) {
       throw sessionError;
+    }
+
+    // Generate audio for greeting if Botnoi token is available
+    let greetingAudioUrl = null;
+    if (agent.greeting && credentials.botnoi) {
+      try {
+        const botnoiResponse = await fetch('https://api-voice.botnoi.ai/openapi/v1/generate_audio', {
+          method: 'POST',
+          headers: {
+            'Botnoi-Token': credentials.botnoi,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            text: agent.greeting.trim(),
+            speaker: "1",
+            volume: 1,
+            speed: 1,
+            type_media: "mp3",
+            save_file: true,
+            language: "th"
+          })
+        });
+
+        if (botnoiResponse.ok) {
+          const botnoiData = await botnoiResponse.json();
+          greetingAudioUrl = botnoiData.audio_url;
+        }
+      } catch (error) {
+        console.error('Failed to generate greeting audio:', error);
+      }
     }
 
     return new Response(
@@ -405,7 +392,12 @@ Instructions for Tool Usage:
           character: agent.character,
           actions: agent.actions,
           faqs: agent.faqs,
+          greeting: agent.greeting,
+          session_quota: agent.session_quota,
+          llm_engine: agent.llm_engine
         },
+        greeting: agent.greeting,
+        greeting_audio_url: greetingAudioUrl
       }),
       {
         headers: {

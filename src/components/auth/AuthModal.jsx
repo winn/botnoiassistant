@@ -15,7 +15,7 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
     fullName: ''
   });
   const [loading, setLoading] = useState(false);
-  const { setApiKey, setBotnoiToken } = useSettings();
+  const { setOpenaiKey, setClaudeKey, setGeminiKey, setBotnoiToken } = useSettings();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,23 +29,29 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }) {
         });
         if (error) throw error;
 
-        const [profile, agents, tools, openaiKey, botnoiToken] = await Promise.all([
+        // Load user data in parallel
+        const [profile, agents, tools, openaiKey, claudeKey, geminiKey, botnoiToken] = await Promise.all([
           loadUserProfile(),
           loadAgents(),
           loadTools(),
           loadCredential('openai'),
+          loadCredential('claude'),
+          loadCredential('gemini'),
           loadCredential('botnoi')
         ]);
 
-        if (openaiKey) setApiKey(openaiKey);
-        if (botnoiToken) setBotnoiToken(botnoiToken);
+        // Set credentials in settings context
+        if (openaiKey) await setOpenaiKey(openaiKey);
+        if (claudeKey) await setClaudeKey(claudeKey);
+        if (geminiKey) await setGeminiKey(geminiKey);
+        if (botnoiToken) await setBotnoiToken(botnoiToken);
 
         onLoginSuccess?.({ 
           user: data.user,
           profile, 
           agents, 
           tools,
-          credentials: { openaiKey, botnoiToken }
+          credentials: { openaiKey, claudeKey, geminiKey, botnoiToken }
         });
         toast.success('Successfully logged in!');
       } else {

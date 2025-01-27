@@ -16,6 +16,7 @@ export default function ChatContainer({
   const chatEndRef = useRef(null);
   const { conversations: contextConversations, setConversations: setContextConversations } = useChat();
   const { textToSpeechEnabled } = useSettings();
+  const prevAgentIdRef = useRef(null);
 
   // Use either provided conversations or context conversations
   const currentConversations = conversations || contextConversations;
@@ -25,6 +26,27 @@ export default function ChatContainer({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentConversations, streamingResponse]);
+
+  // Send greeting message when agent changes
+  useEffect(() => {
+    if (agent?.id && agent.id !== prevAgentIdRef.current && agent.greeting) {
+      // Add greeting message to conversation
+      currentSetConversations(prev => ({
+        ...prev,
+        [agent.id]: [
+          ...(prev[agent.id] || []),
+          {
+            aiResponse: agent.greeting,
+            timestamp: Date.now(),
+            agentId: agent.id,
+            agentName: agent.name,
+            isGreeting: true
+          }
+        ]
+      }));
+    }
+    prevAgentIdRef.current = agent?.id;
+  }, [agent?.id, agent?.greeting]);
 
   const handleSubmit = (input) => {
     if (!input.trim() || !onSubmit) return;

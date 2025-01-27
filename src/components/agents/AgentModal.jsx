@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast';
 export default function AgentModal({ isOpen, onClose, onSave, agent = null, tools = [] }) {
   const [formData, setFormData] = useState({
     name: '',
+    llm_engine: 'gpt-4',
+    greeting: '',
     character: '',
     actions: '',
     enabled_tools: [],
@@ -17,6 +19,8 @@ export default function AgentModal({ isOpen, onClose, onSave, agent = null, tool
       setFormData({
         id: agent.id,
         name: agent.name || '',
+        llm_engine: agent.llm_engine || 'gpt-4',
+        greeting: agent.greeting || '',
         character: agent.character || '',
         actions: agent.actions || '',
         enabled_tools: agent.enabled_tools || [],
@@ -26,6 +30,8 @@ export default function AgentModal({ isOpen, onClose, onSave, agent = null, tool
     } else {
       setFormData({
         name: '',
+        llm_engine: 'gpt-4',
+        greeting: 'Hello! I\'m here to help you. How can I assist you today?',
         character: 'Eva is a friendly, knowledgeable, and patient AI assistant designed to help users navigate the AI builder platform. It uses simple, conversational language to make users feel comfortable and provides step-by-step guidance without overwhelming them. Aiden is proactive, offering tips and encouragement to keep users motivated. Its goal is to make building and sharing AI agents effortless and enjoyable.',
         actions: 'Be Approachable: Use warm, conversational language and avoid technical jargon.\n\nProvide Clear Guidance: Break down tasks into simple, actionable steps.\n\nAnticipate Needs: Offer suggestions and tips before users ask for help.\n\nCelebrate Progress: Acknowledge user achievements and encourage exploration of new features.',
         enabled_tools: [],
@@ -39,6 +45,16 @@ export default function AgentModal({ isOpen, onClose, onSave, agent = null, tool
     
     if (!formData.name?.trim()) {
       toast.error('Please enter an agent name');
+      return;
+    }
+
+    if (!formData.llm_engine) {
+      toast.error('Please select an LLM engine');
+      return;
+    }
+
+    if (!formData.greeting?.trim()) {
+      toast.error('Please enter a greeting message');
       return;
     }
 
@@ -145,6 +161,40 @@ export default function AgentModal({ isOpen, onClose, onSave, agent = null, tool
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
+                        LLM Engine
+                      </label>
+                      <select
+                        value={formData.llm_engine}
+                        onChange={(e) => setFormData({ ...formData, llm_engine: e.target.value })}
+                        className="w-full p-4 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                        disabled={formData.isDefault}
+                      >
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="claude">Claude</option>
+                        <option value="gemini">Gemini</option>
+                      </select>
+                      <p className="mt-2 text-sm text-gray-500">
+                        Select the language model that powers your agent
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Greeting Message
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.greeting}
+                        onChange={(e) => setFormData({ ...formData, greeting: e.target.value })}
+                        className="w-full p-4 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                        placeholder="Enter greeting message"
+                        disabled={formData.isDefault}
+                      />
+                      <p className="mt-2 text-sm text-gray-500">
+                        The first message users will see when they start a conversation
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Character Description
                       </label>
                       <textarea
@@ -215,7 +265,7 @@ export default function AgentModal({ isOpen, onClose, onSave, agent = null, tool
                             className="block cursor-pointer"
                           >
                             <div className="font-medium text-gray-900">{tool.name}</div>
-                            <div className="text-sm text-gray-500 mt-1">{tool.description}</div>
+                            <div className="text-sm text-gray-600 mb-2">{tool.description}</div>
                           </label>
 
                           {formData.enabled_tools.includes(tool.id) && (

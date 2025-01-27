@@ -2,14 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Cog6ToothIcon } from '@heroicons/react/24/solid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettings } from '../../contexts/SettingsContext';
-import { toast } from 'react-hot-toast';
 
 export default function TopMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const {
-    apiKey,
-    setApiKey,
+    openaiKey,
+    setOpenaiKey,
+    claudeKey,
+    setClaudeKey,
+    geminiKey,
+    setGeminiKey,
     botnoiToken,
     setBotnoiToken,
     speechRecognitionEnabled,
@@ -20,17 +23,21 @@ export default function TopMenu() {
 
   // Local state for form values
   const [formValues, setFormValues] = useState({
-    apiKey: apiKey,
+    openaiKey: openaiKey,
+    claudeKey: claudeKey,
+    geminiKey: geminiKey,
     botnoiToken: botnoiToken
   });
 
   // Update local state when props change
   useEffect(() => {
     setFormValues({
-      apiKey: apiKey,
+      openaiKey: openaiKey,
+      claudeKey: claudeKey,
+      geminiKey: geminiKey,
       botnoiToken: botnoiToken
     });
-  }, [apiKey, botnoiToken]);
+  }, [openaiKey, claudeKey, geminiKey, botnoiToken]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -43,14 +50,20 @@ export default function TopMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSaveApiKey = () => {
-    setApiKey(formValues.apiKey);
-    toast.success('OpenAI API key saved successfully');
+  const handleSaveOpenAIKey = async () => {
+    await setOpenaiKey(formValues.openaiKey);
   };
 
-  const handleSaveBotnoiToken = () => {
-    setBotnoiToken(formValues.botnoiToken);
-    toast.success('Botnoi token saved successfully');
+  const handleSaveClaudeKey = async () => {
+    await setClaudeKey(formValues.claudeKey);
+  };
+
+  const handleSaveGeminiKey = async () => {
+    await setGeminiKey(formValues.geminiKey);
+  };
+
+  const handleSaveBotnoiToken = async () => {
+    await setBotnoiToken(formValues.botnoiToken);
   };
 
   return (
@@ -109,49 +122,98 @@ export default function TopMenu() {
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  OpenAI API Key
-                </label>
-                <div className="flex space-x-2">
-                  <input
-                    type="password"
-                    value={formValues.apiKey}
-                    onChange={(e) => setFormValues(prev => ({ ...prev, apiKey: e.target.value }))}
-                    className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                    placeholder="Enter your OpenAI API key"
-                  />
-                  <button
-                    onClick={handleSaveApiKey}
-                    className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-
-              {textToSpeechEnabled && (
+              {/* API Keys */}
+              <div className="space-y-4 border-t pt-4">
+                {/* OpenAI API Key */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Botnoi Voice Token
+                    OpenAI API Key
                   </label>
                   <div className="flex space-x-2">
                     <input
                       type="password"
-                      value={formValues.botnoiToken}
-                      onChange={(e) => setFormValues(prev => ({ ...prev, botnoiToken: e.target.value }))}
+                      value={formValues.openaiKey}
+                      onChange={(e) => setFormValues(prev => ({ ...prev, openaiKey: e.target.value }))}
                       className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
-                      placeholder="Enter your Botnoi Voice token"
+                      placeholder="Enter your OpenAI API key"
                     />
                     <button
-                      onClick={handleSaveBotnoiToken}
+                      onClick={handleSaveOpenAIKey}
                       className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
                     >
                       Save
                     </button>
                   </div>
                 </div>
-              )}
+
+                {/* Claude API Key */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Claude API Key
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="password"
+                      value={formValues.claudeKey}
+                      onChange={(e) => setFormValues(prev => ({ ...prev, claudeKey: e.target.value }))}
+                      className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                      placeholder="Enter your Claude API key"
+                    />
+                    <button
+                      onClick={handleSaveClaudeKey}
+                      className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                {/* Gemini API Key */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Gemini API Key
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="password"
+                      value={formValues.geminiKey}
+                      onChange={(e) => setFormValues(prev => ({ ...prev, geminiKey: e.target.value }))}
+                      className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                      placeholder="Enter your Gemini API key"
+                    />
+                    <button
+                      onClick={handleSaveGeminiKey}
+                      className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                {/* Botnoi Token (only shown if text-to-speech is enabled) */}
+                {textToSpeechEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Botnoi Voice Token
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="password"
+                        value={formValues.botnoiToken}
+                        onChange={(e) => setFormValues(prev => ({ ...prev, botnoiToken: e.target.value }))}
+                        className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all"
+                        placeholder="Enter your Botnoi Voice token"
+                      />
+                      <button
+                        onClick={handleSaveBotnoiToken}
+                        className="px-3 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

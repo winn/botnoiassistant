@@ -6,14 +6,19 @@ import { useSettings } from '../contexts/SettingsContext';
 export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamingResponse, setStreamingResponse] = useState('');
-  const { apiKey, textToSpeechEnabled } = useSettings();
+  const { openaiKey, claudeKey, geminiKey, textToSpeechEnabled } = useSettings();
 
   const handleSubmit = async (input, agent, conversations, setConversations, tools = [], useSupabase = true) => {
     if (!isProcessing && input) {
-      if (!apiKey) {
-        toast.error('Please enter your OpenAI API key in settings');
-        return;
-      }
+      // Get the appropriate API key based on the LLM engine
+      const apiKey = (() => {
+        switch (agent?.llm_engine) {
+          case 'gpt-4': return openaiKey;
+          case 'claude': return claudeKey;
+          case 'gemini': return geminiKey;
+          default: return openaiKey; // Default to OpenAI
+        }
+      })();
 
       if (!agent) {
         toast.error('No agent selected');
@@ -40,21 +45,18 @@ export function useChat({ playAudio, onProcessingStart, onProcessingComplete }) 
       onProcessingStart?.();
       
       try {
-        const enabledTools = tools.filter(tool => 
-          agent.enabled_tools?.includes(tool.id)
-        );
-
         const result = await processAIResponse(
           input,
           apiKey,
           conversations[agent.id] || [],
           agent.character,
           agent.actions,
-          enabledTools,
+          tools,
           (chunk) => setStreamingResponse(prev => prev + chunk),
           useSupabase,
           agent.faqs || [],
-          agent.id
+          agent.id,
+          agent.llm_engine || 'gpt-4'
         );
 
         if (result) {

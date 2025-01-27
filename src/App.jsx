@@ -20,7 +20,7 @@ function ProtectedRoute({ children }) {
   return user ? children : <LandingPage />;
 }
 
-function App() {
+function AppContent() {
   const {
     agents,
     selectedAgentId,
@@ -40,44 +40,50 @@ function App() {
   const isLoading = isLoadingAgents || isLoadingTools;
 
   return (
+    <ChatProvider>
+      <Routes>
+        <Route path="/shared/:shareId" element={
+          <SharedAgentView tools={tools} />
+        } />
+        <Route path="/test/:shareId" element={
+          <TestSharedView tools={tools} />
+        } />
+        <Route path="/" element={
+          <ProtectedRoute>
+            <MainLayout
+              agents={agents}
+              selectedAgentId={selectedAgentId}
+              setSelectedAgentId={setSelectedAgentId}
+              handleDeleteAgent={handleDeleteAgent}
+              tools={tools}
+              onAddTool={() => {}}
+              onEditTool={() => {}}
+              handleDeleteTool={handleDeleteTool}
+              isLoading={isLoading}
+            />
+          </ProtectedRoute>
+        } />
+      </Routes>
+      <ModalContainer
+        tools={tools}
+        onSaveAgent={handleSaveAgent}
+        onSaveTool={handleSaveTool}
+      />
+    </ChatProvider>
+  );
+}
+
+function App() {
+  return (
     <HashRouter>
       <AuthProvider>
         <SettingsProvider>
-          <ChatProvider>
+          <FeaturesProvider>
             <ModalProvider>
-              <FeaturesProvider>
-                <Routes>
-                  <Route path="/shared/:shareId" element={
-                    <SharedAgentView tools={tools} />
-                  } />
-                  <Route path="/test/:shareId" element={
-                    <TestSharedView tools={tools} />
-                  } />
-                  <Route path="/" element={
-                    <ProtectedRoute>
-                      <MainLayout
-                        agents={agents}
-                        selectedAgentId={selectedAgentId}
-                        setSelectedAgentId={setSelectedAgentId}
-                        handleDeleteAgent={handleDeleteAgent}
-                        tools={tools}
-                        onAddTool={() => {}}
-                        onEditTool={() => {}}
-                        handleDeleteTool={handleDeleteTool}
-                        isLoading={isLoading}
-                      />
-                    </ProtectedRoute>
-                  } />
-                </Routes>
-                <ModalContainer
-                  tools={tools}
-                  onSaveAgent={handleSaveAgent}
-                  onSaveTool={handleSaveTool}
-                />
-                <Toaster position="top-right" />
-              </FeaturesProvider>
+              <AppContent />
+              <Toaster position="top-right" />
             </ModalProvider>
-          </ChatProvider>
+          </FeaturesProvider>
         </SettingsProvider>
       </AuthProvider>
     </HashRouter>

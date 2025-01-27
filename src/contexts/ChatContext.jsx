@@ -2,10 +2,12 @@ import React, { createContext, useContext, useState } from 'react';
 import { clearConversationHistory } from '../services/api';
 import { toast } from 'react-hot-toast';
 
-const ChatContext = createContext();
+const ChatContext = createContext(null);
 
 export function ChatProvider({ children }) {
   const [conversations, setConversations] = useState({});
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const clearHistory = async (agentId) => {
     if (!agentId) {
@@ -28,6 +30,10 @@ export function ChatProvider({ children }) {
   const value = {
     conversations,
     setConversations,
+    streamingResponse,
+    setStreamingResponse,
+    isProcessing,
+    setIsProcessing,
     clearHistory
   };
 

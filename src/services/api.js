@@ -13,10 +13,25 @@ export async function processAIResponse(
   onStream,
   useSupabase = true,
   faqs = [],
-  agentId = null
+  agentId = null,
+  llmEngine = 'gpt-4'
 ) {
-  if (!apiKey) {
-    toast.error('Please enter your OpenAI API key in settings');
+  // Check for appropriate API key based on engine
+  const keyError = (() => {
+    switch (llmEngine) {
+      case 'gpt-4':
+        return !apiKey ? 'Please enter your OpenAI API key in settings' : null;
+      case 'claude':
+        return !apiKey ? 'Please enter your Claude API key in settings' : null;
+      case 'gemini':
+        return !apiKey ? 'Please enter your Gemini API key in settings' : null;
+      default:
+        return 'Invalid LLM engine selected';
+    }
+  })();
+
+  if (keyError) {
+    toast.error(keyError);
     return null;
   }
 
@@ -55,7 +70,7 @@ Instructions for Tool Usage:
    - Use the function's response to provide a natural response
 2. If no function is needed, respond directly to the user's request
 3. If the user's question matches any FAQ:
-   - Use the provided answer as your primary source of truth
+   - Use the FAQ answer as your primary source of truth
    - Maintain your character while incorporating the FAQ knowledge
    - Never contradict the FAQ answers
 4. Always maintain the character and behavior defined above
@@ -74,7 +89,7 @@ Instructions for Tool Usage:
   ];
 
   try {
-    const result = await processChatWithFunctions(messages, tools, apiKey, onStream);
+    const result = await processChatWithFunctions(messages, tools, apiKey, onStream, llmEngine);
     
     if (result) {
       const conversation = {
