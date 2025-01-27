@@ -234,7 +234,7 @@ export async function processChatWithFunctions(messages, tools, apiKey, onStream
 
     // Make final streaming request
     const finalRequest = {
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: validMessages,
       temperature: 0.7,
       stream: true
